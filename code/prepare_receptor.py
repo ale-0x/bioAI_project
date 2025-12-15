@@ -1,9 +1,10 @@
 # prepare_receptor.py
 import os
 import sys
-import subprocess
 
-from typing import Optional
+# Importiamo l'interfaccia Python di OpenBabel
+from openbabel import pybel
+from openbabel import openbabel
 
 from constants import INPUT_PDB_FILE, OUTPUT_PDBQT_FILE
 
@@ -14,6 +15,12 @@ def prepare_receptor_pdbqt(input_pdb_file: str, output_pdbqt_file: str) -> bool:
 
     Questo passaggio è necessario per aggiungere idrogeni e cariche al recettore
     prima di eseguire Vina. Rimuove anche acqua e altri eteroatomi (flag -xr).
+
+    Steps:
+    1. Legge il PDB.
+    2. Rimuove l'acqua (HOH) e i sali.
+    3. Aggiunge gli idrogeni polari.
+    4. Calcola le cariche parziali (Gasteiger) e scrive il PDBQT.
 
     Parameters
     ----------
@@ -31,35 +38,91 @@ def prepare_receptor_pdbqt(input_pdb_file: str, output_pdbqt_file: str) -> bool:
         print(f"ERRORE: File PDB di input non trovato: {input_pdb_file}")
         print("Assicurati di aver scaricato il file .pdb e rinominato correttamente.")
         return False
-
-    # Comando OpenBabel per la preparazione del recettore
-    # -xr: Rimuove HETATM (acqua, ligandi cristallizzati, etc.)
-    # --partialcharge gasteiger: Calcola le cariche parziali
-    cmd = [
-        "obabel", 
-        "-ipdb", input_pdb_file, 
-        "-opdbqt", 
-        "-O", output_pdbqt_file, 
-        "-xr", 
-        "--partialcharge", "gasteiger"
-    ]
     
     try:
-        print(f"Avvio preparazione: {input_pdb_file} -> {output_pdbqt_file}")
-        # Esegue il comando in modo silenzioso
-        subprocess.run(cmd, check = True, stdout = subprocess.DEVNULL, stderr = subprocess.DEVNULL)
-        print(f"Preparazione recettore completata con successo.")
+        print(f"Lettura PDB: {input_pdb_file}...")
+        
+        # 1. Lettura del file PDB
+        mol = next(pybel.readfile("pdb", input_pdb_file))
+        obmol = mol.OBMol # Oggetto C++ sottostante
+        
+        # 2. Pulizia Manuale (Rimozione HOH e Ioni)
+        initial_residues = obmol.NumResidues()
+        deleted_count = 0
+        solvent_names = {"HOH", "WAT", "CL", "NA", "MG", "K", "SO4", "PO4"}
+        
+        for i in range(initial_residues - 1, -1, -1):
+            res = obmol.GetResidue(i)
+            if res.GetName().strip() in solvent_names:
+                obmol.DeleteResidue(res)
+                deleted_count += 1
+                
+        if deleted_count > 0:
+            print(f"  - Rimossi {deleted_count} residui di solvente/ioni.")
+
+        # 3. FIX KEKULIZZAZIONE (Rigenerazione Topologia)
+        # Spesso i PDB hanno definizioni di legami ambigue. 
+        # Qui forziamo OB a ricalcolare i legami basandosi solo sulla geometria (distanza).
+        print("  - Ricalcolo della connettività chimica (Fix Kekulization)...")
+        
+        obmol.DeleteHydrogens() # Rimuoviamo idrogeni vecchi/mal posizionati
+        
+        # (Opzionale) Cancelliamo i legami esistenti per forzare il ricalcolo totale
+        # obmol.Clear() cancellerebbe tutto, noi vogliamo solo resettare la bonding info.
+        # ConnectTheDots funziona meglio se lanciato su una struttura 'pulita' dagli idrogeni.
+        obmol.ConnectTheDots() 
+        obmol.PerceiveBondOrders()
+
+        # 4. Aggiunta Idrogeni (pH 7.4) e Cariche
+        print("  - Aggiunta idrogeni polari e calcolo cariche...")
+        obmol.AddHydrogens(False, True, 7.4) # (polari_only=False, correct_pH=True, pH=7.4)
+
+        # 5. Scrittura PDBQT
+        print(f"Scrittura PDBQT: {output_pdbqt_file}...")
+        # L'opzione 'xr' qui non serve perché abbiamo pulito manualmente sopra,
+        # ma è utile assicurarsi che scriva le cariche.
+        mol.write("pdbqt", output_pdbqt_file, overwrite=True)
+        
+        print("Preparazione completata con successo.")
         return True
-        
-    except subprocess.CalledProcessError as e:
-        print(f"ERRORE OpenBabel (Codice {e.returncode}). Controlla l'output di errore:")
-        print(f"{e.stderr.decode()}")
+
+    except Exception as e:
+        print(f"ERRORE CRITICO durante la preparazione: {e}")
+        # Stampiamo l'eccezione completa per debug
+        import traceback
+        traceback.print_exc()
         return False
+
+def fix_receptor_pdbqt(pdbqt_path):
+    """
+    Legge un file PDBQT di recettore e rimuove i tag ROOT/BRANCH/TORSDOF
+    che causano l'errore 'Unknown or inappropriate tag' in Vina.
+    Sovrascrive il file esistente con la versione corretta (rigida).
+    """
+    with open(pdbqt_path, 'r') as f:
+        lines = f.readlines()
+
+    new_lines = []
+    for line in lines:
+        # Ignora i tag che definiscono la flessibilità (tipici dei ligandi)
+        if line.startswith('ROOT') or \
+           line.startswith('ENDROOT') or \
+           line.startswith('BRANCH') or \
+           line.startswith('ENDBRANCH') or \
+           line.startswith('TORSDOF'):
+            continue
         
-    except FileNotFoundError:
-        print(f"ERRORE: Il comando 'obabel' non è stato trovato.")
-        print("Assicurati che OpenBabel sia installato e che l'ambiente Conda sia attivo.")
-        return False
+        # Ignora i REMARK che elencano le torsioni attive (pulizia opzionale ma consigliata)
+        if line.startswith('REMARK') and ('active torsions' in line or 'between atoms' in line):
+            continue
+
+        new_lines.append(line)
+
+    # Sovrascrive il file con la versione pulita
+    with open(pdbqt_path, 'w') as f:
+        f.writelines(new_lines)
+    
+    print(f"--- File recettore corretto per Vina (rimossi tag flessibilità): {pdbqt_path} ---")
 
 
 if __name__ == '__main__':
@@ -72,6 +135,7 @@ if __name__ == '__main__':
         
     # 2. Eseguiamo la preparazione
     success = prepare_receptor_pdbqt(INPUT_PDB_FILE, OUTPUT_PDBQT_FILE)
+    fix_receptor_pdbqt(OUTPUT_PDBQT_FILE)
     
     if success:
         print("\nPronto per eseguire l'Algoritmo Genetico.")
