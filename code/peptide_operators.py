@@ -1,10 +1,10 @@
-# peptide_operators.py
+#  peptide_operators.py
 import random
 
-from constants   import AMINO_ACIDS, BLOSUM62
+from inspyred.ec import Individual
+from typing import List, Tuple, Dict, Any, TYPE_CHECKING
 
-from inspyred.ec import Individual                          # Importa Individual per l'hinting corretto
-from typing      import List, Tuple, Dict, Any, TYPE_CHECKING
+from constants import AMINO_ACIDS, BLOSUM62, INITIAL_MUTATION_RATE, FINAL_MUTATION_RATE
 
 # Solo per l'hinting, evitando dipendenze cicliche o problemi di runtime
 if TYPE_CHECKING:
@@ -115,6 +115,53 @@ def get_blosum_weights(
 
 
 
+# --- Funzione Helper per il Rate Adattivo ---
+
+def get_adaptive_mutation_rate(args: Dict[str, Any]) -> float:
+    """
+    Calcola il tasso di mutazione adattivo basandosi sul progresso del GA.
+
+    Il rate decade linearmente da `INITIAL_MUTATION_RATE` a `FINAL_MUTATION_RATE` 
+    man mano che le generazioni avanzano. Questo implementa una strategia 
+    "Esplorazione" (alto rate) iniziale e "Sfruttamento" (basso rate) finale.
+
+    Parameters
+    ----------
+    args : `Dict[str, Any]`
+        Dizionario di argomenti, deve contenere la chiave '_ec' (EvolutionaryComputation) 
+        e 'max_generations' per il calcolo.
+
+    Returns
+    -------
+    `float`
+        Il tasso di mutazione corrente.
+    
+    Examples
+    --------
+    # Se il GA è a 50 su 100 generazioni (a metà)
+    # Rate = 0.30 - (0.30 - 0.05) * 0.5 = 0.175
+    """
+    # inspyred passa l'oggetto EvolutionaryComputation in args['_ec']
+    ec = args.get('_ec', None)
+    
+    if ec is None:
+        return FINAL_MUTATION_RATE # Fallback sicuro
+        
+    current_gen = ec.num_generations
+    max_gen = args.get('max_generations', 100) # Deve corrispondere a MAX_GENERATIONS
+    
+    if max_gen == 0: return FINAL_MUTATION_RATE
+
+    # Progresso da 0.0 a 1.0
+    progress = min(1.0, current_gen / max_gen)
+    
+    # Interpolazione lineare (Lerp)
+    # Rate = Start - (Start - End) * Progress
+    current_rate = INITIAL_MUTATION_RATE - (INITIAL_MUTATION_RATE - FINAL_MUTATION_RATE) * progress
+    
+    return current_rate
+
+
 # --- Operatore di Mutazione ---
 
 def blosum_peptide_mutator(
@@ -123,20 +170,20 @@ def blosum_peptide_mutator(
         args     : Dict[str, Any]
 ) -> str:
     """
-    Esegue la Mutazione a Sostituzione con probabilità pesate da BLOSUM62.
+    Mutatore che applica mutazioni agli aminoacidi di una sequenza peptidica.
 
-    Per ogni posizione nella sequenza, viene applicata una mutazione con 
-    probabilità `mutation_rate`. Se la mutazione avviene, l'aminoacido 
-    di sostituzione è scelto in base alla distribuzione pesata da BLOSUM62.
+    La probabilità di mutare un aminoacido in un altro è ponderata dalla 
+    matrice di sostituzione BLOSUM62, favorendo le sostituzioni conservative.
+    Il tasso di mutazione viene adattato dinamicamente con l'avanzare delle generazioni.
 
     Parameters
     ----------
     random : `random.Random`
-        L'istanza dell'oggetto casuale fornita dal framework `inspyred`.
+        L'istanza dell'oggetto casuale.
     candidate : `str`
-        La sequenza peptidica (stringa) da mutare.
+        La sequenza peptidica da mutare.
     args : `Dict[str, Any]`
-        Dizionario di argomenti, deve contenere la chiave `'mutation_rate'` (`float`).
+        Dizionario di argomenti, usato per recuperare il rate adattivo.
 
     Returns
     -------
@@ -150,24 +197,15 @@ def blosum_peptide_mutator(
     >>> print(mutated_seq) 
     'IVTA' # Esempio di mutazione da L a I, favorita da BLOSUM.
     """
-    mutation_probability: float = args.get('mutation_rate') 
-    
-    if mutation_probability is None:
-        from constants import MUTATION_RATE
-        mutation_probability = MUTATION_RATE
-        
-    mutated_sequence: List[str] = list(candidate)
+    mutation_probability: float     = get_adaptive_mutation_rate(args)
+    mutated_sequence    : List[str] = list(candidate)
     
     for i in range(len(mutated_sequence)):
         if random.random() < mutation_probability:
-            original_aa: str = mutated_sequence[i]
-
-            targets, weights = get_blosum_weights(original_aa)
-            
-            # random.choices seleziona un elemento basato sui pesi
-            new_amino_acid: str = random.choices(targets, weights=weights, k=1)[0]
-            
-            mutated_sequence[i] = new_amino_acid
+            original_aa        : str = mutated_sequence[i]
+            targets, weights         = get_blosum_weights(original_aa, args) # Passiamo args anche qui
+            new_amino_acid     : str = random.choices(targets, weights = weights, k = 1)[0]
+            mutated_sequence[i]      = new_amino_acid
 
     return "".join(mutated_sequence)
 

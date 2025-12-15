@@ -5,7 +5,7 @@ from inspyred.ec import terminators, observers
 from typing import Optional, Any
 
 # Importa i moduli del progetto
-from constants import POPULATION_SIZE, MAX_GENERATIONS, MUTATION_RATE, PEPTIDE_LENGTH
+from constants import POPULATION_SIZE, MAX_GENERATIONS, PEPTIDE_LENGTH
 from ga_problem import peptide_generator, evaluate_peptide_binding
 from peptide_operators import peptide_chain_variator, single_point_crossover, blosum_peptide_mutator
 from inspyred.ec import Individual # Necessario per l'hinting di ritorno
@@ -38,7 +38,7 @@ def run_peptide_ga() -> Individual:
     rand.seed(77) # Seed per la riproducibilità
 
     print(f"--- Avvio Algoritmo Genetico (Peptide Length: {PEPTIDE_LENGTH}) ---")
-    print(f"Popolazione: {POPULATION_SIZE}, Generazioni: {MAX_GENERATIONS}, Mutazione/AA: {MUTATION_RATE}")
+    print(f"Popolazione: {POPULATION_SIZE}, Generazioni: {MAX_GENERATIONS}")
 
     # 1. Setup dell'Algoritmo Evolutivo (EA)
     ea = inspyred.ec.EvolutionaryComputation(rand)
@@ -56,18 +56,18 @@ def run_peptide_ga() -> Individual:
     
     # 4. Imposta il terminatore e l'osservatore
     ea.terminator = terminators.generation_termination
-    # ea.observer   = observers.best_observer
     
     # Esegui l'EA
     final_pop = ea.evolve(
-        generator=peptide_generator,
-        evaluator=evaluate_peptide_binding,
+        generator        = peptide_generator,
+        evaluator        = evaluate_peptide_binding,
+        num_elites       = 1,                                       # Conserva il miglior individuo dalla generazione precedente
         
-        generator_params = {'peptide_length': PEPTIDE_LENGTH},
-        variator_params  = {'mutation_rate' : MUTATION_RATE},   # Parametri passati a peptide_chain_variator
+        generator_params = {'peptide_length': PEPTIDE_LENGTH},      # Parametri passati in args ai variatori
+        variator_params  = {'max_generations': MAX_GENERATIONS},    # Parametri passati a peptide_chain_variator (max_generations qui per il calcolo adattivo)
         num_generations  = MAX_GENERATIONS,
         pop_size         = POPULATION_SIZE,
-        maximize         = True 
+        maximize         = False,                                   # Vina: Più negativo è meglio. Quindi vogliamo minimizzare
     )
 
     best_individual: Individual = max(final_pop)
@@ -80,4 +80,3 @@ def run_peptide_ga() -> Individual:
 
 if __name__ == '__main__':
     best = run_peptide_ga()
-    

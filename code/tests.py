@@ -1,3 +1,5 @@
+# tests.py
+
 # Puoi aggiungere questo blocco temporaneamente a ga_problem.py o main.py per testare
 import random
 from ga_problem import peptide_generator
