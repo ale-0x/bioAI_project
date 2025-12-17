@@ -1,13 +1,11 @@
 # ga_problem.py
 import os
 import numpy            as np
-import PeptideBuilder
 import random
+import re
 import subprocess
 
-from Bio.PDB        import PDBIO
-from meeko          import MoleculePreparation, PDBQTWriterLegacy
-from PeptideBuilder import Geometry, Structure
+from openbabel      import openbabel, pybel
 from rdkit          import Chem
 from rdkit.Chem     import AllChem
 from typing         import Any, Dict, List
@@ -55,126 +53,53 @@ def peptide_generator(random: random.Random, args: Dict[str, Any]) -> str:
 
 # --- Funzioni Helper e pipeline di preparazione (RDKit + Meeko) per Struttura e Docking ---
 
-def clean_structure_elements(structure: Structure) -> None:
+def generate_pdb_rdkit(seq: str, filename: str):
     """
-    Utility per assicurare che BioPython scriva gli elementi chimici corretti.
+    Genera PDB con RDKit: chimica corretta, idrogeni presenti, geometria rilassata.
     """
-    for atom in structure.get_atoms():
-        # Se l'elemento manca, lo intuiamo dal nome (es. "CA" -> "C")
-        if not atom.element:
-            # Prende il primo carattere del nome (es. "CB" -> "C")
-            atom.element = atom.name.strip()[0].upper()
-        else:
-            # Assicura che sia uppercase (es. "c" -> "C")
-            atom.element = atom.element.upper()
-
-def generate_pdb_fast(sequence: str, filename: str) -> None:
-    """
-    Genera un file PDB (struttura 3D) per la sequenza peptidica.
-
-    Utilizza la libreria `PeptideBuilder` per creare istantaneamente una
-    struttura lineare estesa, assumendo una geometria standard per i legami.
-    Questo metodo è estremamente veloce ed è cruciale per la velocità del GA.
-
-    Parameters
-    ----------
-    sequence : `str`
-        La sequenza peptidica (stringa di aminoacidi) da modellare.
-    filename : `str`
-        Il percorso completo dove salvare il file PDB generato.
-
-    Returns
-    -------
-    Nessuno. Salva la struttura nel file specificato.
-
-    Examples
-    --------
-    >>> generate_pdb_fast("ALTSV", "temp/test.pdb")
-    # Viene creato il file temp/test.pdb
-    """
-    # Crea una struttura lineare estesa (phi=-180, psi=180)
-    structure = PeptideBuilder.make_structure(
-        sequence, 
-        [180] * len(sequence), 
-        [180] * len(sequence)
-    )
-
-    # Corregge i simboli degli elementi per OpenBabel
-    clean_structure_elements(structure)
-
-    # Salva il PDB
-    io = PDBIO()
-    io.set_structure(structure)
-    io.save(filename)
-
-def prepare_ligand_meeko(pdb_path: str, pdbqt_output_path: str) -> bool:
-    """
-    Pipeline Aggiornata (Robustezza RDKit + Meeko Fix Tuple):
-    1. RDKit: Legge PDB (sanitize=False per evitare errori di valenza).
-    2. Meeko: Gestisce il return type che potrebbe essere una tupla.
-    """
+    # 1. Crea Molecola da Sequenza
+    mol = Chem.MolFromSequence(seq)
+    
+    # 2. Aggiunge Idrogeni (Essenziale per il 3D)
+    mol = Chem.AddHs(mol)
+    
+    # 3. Genera 3D (Embedding)
+    params = AllChem.ETKDGv3()
+    params.useRandomCoords = True 
+    if AllChem.EmbedMolecule(mol, params) == -1:
+        # Fallback se fallisce il primo tentativo
+        params.useRandomCoords = True
+        AllChem.EmbedMolecule(mol, params)
+        
+    # 4. Minimizzazione Energetica (Rilassa la struttura)
     try:
-        # --- A. RDKit: Lettura "Gentile" ---
-        # sanitize=False è CRUCIALE con PeptideBuilder.
-        # Evita che RDKit vada in crash se gli atomi sono troppo vicini.
-        mol = Chem.MolFromPDBFile(pdb_path, removeHs=False, sanitize=False)
+        AllChem.MMFFOptimizeMolecule(mol)
+    except:
+        pass # Se MMFF fallisce, usiamo comunque la struttura generata
+
+    # 5. Salva PDB
+    Chem.MolToPDBFile(mol, filename)
+
+def prepare_ligand_openbabel(pdb_path: str, pdbqt_output_path: str) -> bool:
+    try:
+        # 1. Leggi PDB (Generato da RDKit, quindi sicuro)
+        mol = next(pybel.readfile("pdb", pdb_path))
         
-        if mol is None:
-            return False
-
-        # Tentativo di correzione chimica manuale
-        try:
-            mol.UpdatePropertyCache(strict=False)
-            # FastFindRings serve per definire aromaticità e cicli
-            Chem.GetSymmSSSR(mol) 
-        except:
-            pass # Se fallisce, proviamo a continuare lo stesso
-
-        # Aggiunge idrogeni (se mancano)
-        mol = Chem.AddHs(mol, addCoords=True)
-
-        # --- B. RDKit: Centratura ---
-        conf = mol.GetConformer()
-        coords = conf.GetPositions()
-        centroid = np.mean(coords, axis=0)
-        
+        # 2. Centratura nella tasca (Box Vina)
+        atoms = [atom.coords for atom in mol] 
+        centroid = np.mean(atoms, axis=0)
         target_center = np.array([CENTER_X, CENTER_Y, CENTER_Z])
-        translation = target_center - centroid
+        move_v = target_center - centroid
+        mol.OBMol.Translate(openbabel.vector3(move_v[0], move_v[1], move_v[2]))
         
-        for i in range(mol.GetNumAtoms()):
-            pos = conf.GetAtomPosition(i)
-            new_pos = (pos.x + translation[0], pos.y + translation[1], pos.z + translation[2])
-            conf.SetAtomPosition(i, new_pos)
-
-        # --- C. Meeko v0.5: Generazione PDBQT ---
-        preparator = MoleculePreparation()
+        # 3. Scrittura PDBQT (OpenBabel calcola le cariche Gasteiger automaticamente)
+        mol.write("pdbqt", pdbqt_output_path, overwrite=True)
         
-        # Prepara la molecola
-        mol_setups = preparator.prepare(mol)
-        
-        if mol_setups:
-            # Ottieni l'output grezzo
-            pdbqt_data = PDBQTWriterLegacy.write_string(mol_setups[0])
-            
-            # --- FIX TUPLE ERROR ---
-            # Se Meeko restituisce (string, info), prendiamo solo string
-            if isinstance(pdbqt_data, tuple):
-                pdbqt_string = pdbqt_data[0]
-            else:
-                pdbqt_string = pdbqt_data
-            
-            # Scrittura su file
-            with open(pdbqt_output_path, "w") as f:
-                f.write(pdbqt_string)
-            return True
-        else:
-            return False
-
+        return os.path.exists(pdbqt_output_path) and os.path.getsize(pdbqt_output_path) > 0
     except Exception as e:
-        # Stampa l'errore ma non bloccare tutto il programma
-        print(f"Error in ligand prep (RDKit/Meeko) for {pdb_path}: {e}")
+        print(f"[ERR] Conversione fallita per {pdb_path}: {e}")
         return False
-
+    
 
 
 # def run_vina_real(pdbqt_ligand: str) -> float:
@@ -264,33 +189,33 @@ def run_vina_real(pdbqt_ligand: str) -> float:
         "--size_x"  , str(SIZE_X)  , "--size_y"  , str(SIZE_Y)  , "--size_z"  , str(SIZE_Z),
         "--exhaustiveness", str(EXHAUSTIVENESS),
         "--out", out_file,
-        "--cpu", "1" 
+        "--cpu", "7" 
     ]
     
     try:
         # --- MODIFICA DEBUG: capture_output=True e check=False ---
         # Catturiamo sia stdout che stderr per vederli
-        result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+        subprocess.run(cmd, capture_output=False, text=True, check=False)
         
-        # Se Vina ha scritto qualcosa su stderr (errori), stampiamolo!
-        if result.stderr:
-            print(f"\n--- VINA ERROR LOG ({pdbqt_ligand}) ---")
-            print(result.stderr)
-            print("---------------------------------------")
+        if not os.path.exists(out_file):
+            print(f"[ERR] Vina non ha creato il file di output: {out_file}")
+            return 0.0
 
         # Parsing dell'output
         best_affinity = 0.0
         found = False
         
-        for line in result.stdout.splitlines():
-            # Cerca la riga che inizia con "   1" (il primo modo)
-            if line.strip().startswith("1"):
-                parts = line.split()
-                if len(parts) >= 2:
+        with open(out_file, 'r') as f:
+            for line in f:
+                # Cerchiamo la riga: REMARK VINA RESULT: -8.5 0.000 0.000
+                if line.startswith("REMARK VINA RESULT:"):
+                    parts = line.split()
+                    # L'energia è il terzo elemento (indice 3) perché:
+                    # parts[0]="REMARK", [1]="VINA", [2]="RESULT:", [3]="-8.5"
                     try:
-                        best_affinity = float(parts[1])
+                        best_affinity = float(parts[3])
                         found = True
-                        break
+                        break # Abbiamo trovato il primo modello (il migliore), usciamo
                     except ValueError:
                         continue
         
@@ -301,8 +226,11 @@ def run_vina_real(pdbqt_ligand: str) -> float:
 
         return best_affinity
 
+    except subprocess.CalledProcessError:
+        print(f"[ERR] Vina è andato in crash sul file {pdbqt_ligand}")
+        return 0.0
     except Exception as e:
-        print(f"Vina Exception: {e}")
+        print(f"[ERR] Errore generico in run_vina_real: {e}")
         return 0.0
 
 
@@ -345,10 +273,10 @@ def evaluate_peptide_binding(candidates: List[str], args: Dict[str, Any]) -> Lis
         
         try:
             # 1. Generazione Struttura
-            generate_pdb_fast(seq, pdb_file)
+            generate_pdb_rdkit(seq, pdb_file)
             
             # 2. Pybel -> RDKit (Centratura) -> Meeko
-            success = prepare_ligand_meeko(pdb_file, pdbqt_file)
+            success = prepare_ligand_openbabel(pdb_file, pdbqt_file)
             
             # 3. Docking
             if success:

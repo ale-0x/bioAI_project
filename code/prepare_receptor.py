@@ -61,34 +61,44 @@ def prepare_receptor_pdbqt(input_pdb_file: str, output_pdbqt_file: str) -> bool:
             print(f"  - Rimossi {deleted_count} residui di solvente/ioni.")
 
         # 3. FIX KEKULIZZAZIONE (Rigenerazione Topologia)
-        # Spesso i PDB hanno definizioni di legami ambigue. 
-        # Qui forziamo OB a ricalcolare i legami basandosi solo sulla geometria (distanza).
         print("  - Ricalcolo della connettività chimica (Fix Kekulization)...")
-        
-        obmol.DeleteHydrogens() # Rimuoviamo idrogeni vecchi/mal posizionati
-        
-        # (Opzionale) Cancelliamo i legami esistenti per forzare il ricalcolo totale
-        # obmol.Clear() cancellerebbe tutto, noi vogliamo solo resettare la bonding info.
-        # ConnectTheDots funziona meglio se lanciato su una struttura 'pulita' dagli idrogeni.
+        obmol.DeleteHydrogens() 
         obmol.ConnectTheDots() 
         obmol.PerceiveBondOrders()
 
         # 4. Aggiunta Idrogeni (pH 7.4) e Cariche
         print("  - Aggiunta idrogeni polari e calcolo cariche...")
-        obmol.AddHydrogens(False, True, 7.4) # (polari_only=False, correct_pH=True, pH=7.4)
+        obmol.AddHydrogens(False, True, 7.4) 
 
-        # 5. Scrittura PDBQT
+        # 5. Scrittura PDBQT (OpenBabel crea un file con ROOT/BRANCH qui)
         print(f"Scrittura PDBQT: {output_pdbqt_file}...")
-        # L'opzione 'xr' qui non serve perché abbiamo pulito manualmente sopra,
-        # ma è utile assicurarsi che scriva le cariche.
         mol.write("pdbqt", output_pdbqt_file, overwrite=True)
         
+        # --- [NUOVO PASSAGGIO] 6. Post-processing per Vina (Rimuove flessibilità) ---
+        # Riapriamo il file appena creato per rimuovere i tag che mandano in crash Vina
+        print("  - Post-processing: Rimozione tag flessibilità (ROOT/BRANCH)...")
+        
+        with open(output_pdbqt_file, 'r') as f:
+            lines = f.readlines()
+            
+        with open(output_pdbqt_file, 'w') as f:
+            for line in lines:
+                # Scriviamo la riga SOLO se NON è un tag di flessibilità
+                if not (
+                    line.startswith('ROOT')      or 
+                    line.startswith('ENDROOT')   or 
+                    line.startswith('BRANCH')    or 
+                    line.startswith('ENDBRANCH') or 
+                    line.startswith('TORSDOF')
+                ):
+                    f.write(line)
+        # --------------------------------------------------------------------------
+
         print("Preparazione completata con successo.")
         return True
 
     except Exception as e:
         print(f"ERRORE CRITICO durante la preparazione: {e}")
-        # Stampiamo l'eccezione completa per debug
         import traceback
         traceback.print_exc()
         return False
