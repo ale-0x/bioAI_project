@@ -29,7 +29,7 @@ FINAL_MUTATION_RATE   = 0.05                        # 5% alla fine (Raffinamento
 # ATTENZIONE: Questi valori devono essere specifici per la proteina (es. 7CAM)
 RECEPTOR_FILE                = OUTPUT_PDBQT_FILE        # Il recettore preparato
 CENTER_X, CENTER_Y, CENTER_Z = 8.084, -13.829, -0.140   # Coordinate centro tasca
-SIZE_X, SIZE_Y, SIZE_Z       = 20, 20, 20               # Dimensioni box (Angstrom)
-EXHAUSTIVENESS               = 7                        # Precisione di ricerca (8 è default, 32 è lento ma preciso)
+SIZE_X, SIZE_Y, SIZE_Z       = 32, 32, 32               # Dimensioni box (Angstrom)
+EXHAUSTIVENESS               = 2                        # Precisione di ricerca (8 è default, 32 è lento ma preciso)
 VINA_EXE_PATH                = "vina"                   # Assumi che 'vina' sia nel PATH
 TEMP_DOCKING                 = "../resources/tmp/temp_docking"

@@ -53,32 +53,58 @@ def peptide_generator(random: random.Random, args: Dict[str, Any]) -> str:
 
 # --- Funzioni Helper e pipeline di preparazione (RDKit + Meeko) per Struttura e Docking ---
 
-def generate_pdb_rdkit(seq: str, filename: str):
-    """
-    Genera PDB con RDKit: chimica corretta, idrogeni presenti, geometria rilassata.
-    """
-    # 1. Crea Molecola da Sequenza
-    mol = Chem.MolFromSequence(seq)
+# def generate_pdb_rdkit(seq: str, filename: str):
+#     """
+#     Genera PDB con RDKit: chimica corretta, idrogeni presenti, geometria rilassata.
+#     """
+#     # 1. Crea Molecola da Sequenza
+#     mol = Chem.MolFromSequence(seq)
     
-    # 2. Aggiunge Idrogeni (Essenziale per il 3D)
-    mol = Chem.AddHs(mol)
+#     # 2. Aggiunge Idrogeni (Essenziale per il 3D)
+#     mol = Chem.AddHs(mol)
     
-    # 3. Genera 3D (Embedding)
-    params = AllChem.ETKDGv3()
-    params.useRandomCoords = True 
-    if AllChem.EmbedMolecule(mol, params) == -1:
-        # Fallback se fallisce il primo tentativo
-        params.useRandomCoords = True
-        AllChem.EmbedMolecule(mol, params)
+#     # 3. Genera 3D (Embedding)
+#     params = AllChem.ETKDGv3()
+#     params.useRandomCoords = True 
+#     if AllChem.EmbedMolecule(mol, params) == -1:
+#         # Fallback se fallisce il primo tentativo
+#         params.useRandomCoords = True
+#         AllChem.EmbedMolecule(mol, params)
         
-    # 4. Minimizzazione Energetica (Rilassa la struttura)
-    try:
-        AllChem.MMFFOptimizeMolecule(mol)
-    except:
-        pass # Se MMFF fallisce, usiamo comunque la struttura generata
+#     # 4. Minimizzazione Energetica (Rilassa la struttura)
+#     try:
+#         AllChem.MMFFOptimizeMolecule(mol)
+#     except:
+#         pass # Se MMFF fallisce, usiamo comunque la struttura generata
 
-    # 5. Salva PDB
-    Chem.MolToPDBFile(mol, filename)
+#     # 5. Salva PDB
+#     Chem.MolToPDBFile(mol, filename)
+
+# In ga_problem.py
+
+def generate_pdb_rdkit(sequence: str, output_file: str):
+    try:
+        mol = Chem.MolFromSequence(sequence)
+        mol = Chem.AddHs(mol)
+        
+        # 1. Embedding (Generazione coordinate iniziali)
+        # Usa ETKDGv3 che è più robusto per molecole grandi/cicliche
+        params = AllChem.ETKDGv3()
+        params.useRandomCoords = True
+        result = AllChem.EmbedMolecule(mol, params)
+        
+        if result == -1:
+            # Fallback se fallisce
+            AllChem.EmbedMolecule(mol, useRandomCoords=True)
+            
+        # 2. MINIMIZZAZIONE (Fondamentale!)
+        # Rilassa la struttura per evitare atomi sovrapposti
+        AllChem.MMFFOptimizeMolecule(mol)
+        
+        Chem.MolToPDBFile(mol, output_file)
+    except Exception as e:
+        print(f"Errore generazione RDKit per {sequence}: {e}")
+        # Gestisci l'errore o crea un file vuoto
 
 def prepare_ligand_openbabel(pdb_path: str, pdbqt_output_path: str) -> bool:
     try:
