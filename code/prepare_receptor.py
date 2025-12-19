@@ -103,11 +103,33 @@ def prepare_receptor_pdbqt(input_pdb_file: str, output_pdbqt_file: str) -> bool:
         traceback.print_exc()
         return False
 
-def fix_receptor_pdbqt(pdbqt_path):
+def fix_receptor_pdbqt(pdbqt_path) -> None:
     """
-    Legge un file PDBQT di recettore e rimuove i tag ROOT/BRANCH/TORSDOF
-    che causano l'errore 'Unknown or inappropriate tag' in Vina.
-    Sovrascrive il file esistente con la versione corretta (rigida).
+    Post-processa il file PDBQT del recettore per rimuovere le definizioni di flessibilità (rigidificazione).
+
+    OpenBabel, durante la conversione da PDB a PDBQT, calcola spesso le torsioni attive e struttura
+    il file con un albero di flessibilità (tag `ROOT`, `BRANCH`). Tuttavia, per il docking standard
+    (recettore rigido), AutoDock Vina richiede che il file del recettore non contenga questi tag.
+    Questa funzione legge il file generato, filtra le righe problematiche e sovrascrive il file originale.
+
+    Parameters
+    ----------
+    pdbqt_path : `str`
+        Il percorso assoluto o relativo al file PDBQT del recettore da correggere.
+        Il file viene modificato **in-place** (il contenuto originale viene sovrascritto).
+
+    Returns
+    -------
+    None
+        La funzione non restituisce valori. Stampa un messaggio di conferma al termine dell'operazione.
+
+    Notes
+    -----
+    Le righe rimosse iniziano con le seguenti keyword:
+    - ``ROOT``, ``ENDROOT``
+    - ``BRANCH``, ``ENDBRANCH``
+    - ``TORSDOF``
+    - ``REMARK`` (solo quelli relativi a "active torsions")
     """
     with open(pdbqt_path, 'r') as f:
         lines = f.readlines()
