@@ -4,7 +4,9 @@ import random
 from inspyred.ec import Individual
 from typing import List, Tuple, Dict, Any, TYPE_CHECKING
 
-from constants import AMINO_ACIDS, BLOSUM62, INITIAL_MUTATION_RATE, FINAL_MUTATION_RATE
+import constants as C
+
+from utils import print_verbose
 
 # Solo per l'hinting, evitando dipendenze cicliche o problemi di runtime
 if TYPE_CHECKING:
@@ -89,17 +91,17 @@ def get_blosum_weights(
     biologicamente favorite.
     """
     # Ritorna alla selezione uniforme se la matrice non è disponibile
-    if BLOSUM62 is None:
-        return list(AMINO_ACIDS), [1.0] * len(AMINO_ACIDS)
+    if C.BLOSUM62 is None:
+        return list(C.AMINO_ACIDS), [1.0] * len(C.AMINO_ACIDS)
         
     targets: List[str]   = []
     weights: List[float] = []
     
-    for target_aa in AMINO_ACIDS:
+    for target_aa in C.AMINO_ACIDS:
         try:
             # Recupera il punteggio
             # Utilizza .get per gestire le coppie (target, original) se non sono simmetriche o presenti
-            score: int = BLOSUM62.get((original_aa, target_aa), 0)
+            score: int = C.BLOSUM62.get((original_aa, target_aa), 0)
         except (KeyError, ValueError):
             continue
 
@@ -141,23 +143,24 @@ def get_adaptive_mutation_rate(args: Dict[str, Any]) -> float:
     # Se il GA è a 50 su 100 generazioni (a metà)
     # Rate = 0.30 - (0.30 - 0.05) * 0.5 = 0.175
     """
+    print_verbose("get_adaptive_mutation_rate:", args)
     # inspyred passa l'oggetto EvolutionaryComputation in args['_ec']
     ec = args.get('_ec', None)
     
     if ec is None:
-        return FINAL_MUTATION_RATE # Fallback sicuro
+        return C.FINAL_MUTATION_RATE # Fallback sicuro
         
     current_gen = ec.num_generations
-    max_gen = args.get('max_generations', 100) # Deve corrispondere a MAX_GENERATIONS
+    max_gen = args.get('max_generations', C.MAX_GENERATIONS) # Deve corrispondere a MAX_GENERATIONS
     
-    if max_gen == 0: return FINAL_MUTATION_RATE
+    if max_gen == 0: return C.FINAL_MUTATION_RATE
 
     # Progresso da 0.0 a 1.0
     progress = min(1.0, current_gen / max_gen)
     
     # Interpolazione lineare (Lerp)
     # Rate = Start - (Start - End) * Progress
-    current_rate = INITIAL_MUTATION_RATE - (INITIAL_MUTATION_RATE - FINAL_MUTATION_RATE) * progress
+    current_rate = C.INITIAL_MUTATION_RATE - (C.INITIAL_MUTATION_RATE - C.FINAL_MUTATION_RATE) * progress
     
     return current_rate
 
@@ -197,6 +200,7 @@ def blosum_peptide_mutator(
     >>> print(mutated_seq) 
     'IVTA' # Esempio di mutazione da L a I, favorita da BLOSUM.
     """
+    print_verbose("blosum_peptide_mutator:", args)
     mutation_probability: float     = get_adaptive_mutation_rate(args)
     mutated_sequence    : List[str] = list(candidate)
     
@@ -241,7 +245,7 @@ def peptide_chain_variator(
     `List[str]`
         Lista di sequenze peptidiche (figli) variate.
     """
-    
+    print_verbose("peptide_chain_variator:", args)
     # Inizializza la lista per i nuovi figli
     new_population: List[str] = []
     

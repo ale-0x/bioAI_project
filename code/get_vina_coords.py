@@ -16,14 +16,43 @@ LIGAND_SELECTION = f"resn {LIGAND_CODE} and {OBJECT_NAME}"
 # Funzione per calcolare il centro geometrico (centroid) di una selezione
 def get_centroid(selection: str) -> np.ndarray:
     """
-    Calcola il centro geometrico (centroid) di una selezione PyMOL.
+    Calcola il centro geometrico (centroide) di una selezione di atomi in PyMOL.
+
+    Questa funzione interroga l'API di PyMOL per ottenere le coordinate atomiche
+    della selezione specificata e ne calcola la media aritmetica lungo gli assi X, Y e Z.
+    Il risultato viene utilizzato tipicamente per definire il centro della box di ricerca per il docking.
+
+    Parameters
+    ----------
+    selection : `str`
+        La stringa di selezione in sintassi PyMOL (es. 'resn LIG', 'chain A and resi 50-60').
+        Identifica gli atomi su cui calcolare il centro.
+
+    Returns
+    -------
+    `np.ndarray`
+        Un array NumPy di forma `(3,)` contenente le coordinate `[x, y, z]` del centroide 
+        (in Ångstrom).
+
+    Raises
+    ------
+    ValueError
+        Se la selezione fornita non corrisponde ad alcun atomo caricato nella sessione PyMOL
+        (modello vuoto).
+    
+    Examples
+    --------
+    >>> # Calcola il centro del ligando '3TL' nell'oggetto '2P3D'
+    >>> center = get_centroid("resn 3TL and 2P3D")
+    >>> print(center)
+    [ 8.084 -13.829  -0.140]
     """
     model = cmd.get_model(selection)
     if not model.atom:
         raise ValueError(f"Selezione vuota: {selection}. Controlla l'ID del ligando.")
         
     coords = np.array([a.coord for a in model.atom])
-    return coords.mean(axis=0)
+    return coords.mean(axis = 0)
 
 # --- 2. Esecuzione ---
 if __name__ == '__main__':

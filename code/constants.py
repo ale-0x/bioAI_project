@@ -1,5 +1,11 @@
 # constants.py
+
+__author__  = "Alex Callegaro"
+__version__ = '1.0.0'
+
 from Bio.Align import substitution_matrices
+
+SEED = 77
 
 # I 20 aminoacidi canonici (codici a una lettera)
 AMINO_ACIDS = 'ACDEFGHIKLMNPQRSTVWY'
@@ -17,9 +23,9 @@ INPUT_PDB_FILE    = f"../resources/pdb/{PROTEIN_NAME}.pdb"
 OUTPUT_PDBQT_FILE = f"../resources/pdbqt/{PROTEIN_NAME}.pdbqt"
 
 # --- Parametri del GA ---
-PEPTIDE_LENGTH  = 10                                # Lunghezza fissa del peptide da evolvere
-POPULATION_SIZE = 1                                # Dimensione della popolazione per generazione (50?)
-MAX_GENERATIONS = 0                               # Numero massimo di generazioni
+PEPTIDE_LENGTH  = 10                               # Lunghezza fissa del peptide da evolvere
+POPULATION_SIZE = 40                                # Dimensione della popolazione per generazione (50?)
+MAX_GENERATIONS = 30                               # Numero massimo di generazioni
 
 # --- Parametri Adattivi (Strategia Esplorazione -> Sfruttamento) ---
 INITIAL_MUTATION_RATE = 0.30                        # 30% all'inizio (Alto caos/esplorazione)
@@ -30,6 +36,6 @@ FINAL_MUTATION_RATE   = 0.05                        # 5% alla fine (Raffinamento
 RECEPTOR_FILE                = OUTPUT_PDBQT_FILE        # Il recettore preparato
 CENTER_X, CENTER_Y, CENTER_Z = 8.084, -13.829, -0.140   # Coordinate centro tasca
 SIZE_X, SIZE_Y, SIZE_Z       = 32, 32, 32               # Dimensioni box (Angstrom)
-EXHAUSTIVENESS               = 2                        # Precisione di ricerca (8 è default, 32 è lento ma preciso)
+CPUS                         = 8
+EXHAUSTIVENESS               = 8                        # Precisione di ricerca (8 è default, 32 è lento ma preciso)
 VINA_EXE_PATH                = "vina"                   # Assumi che 'vina' sia nel PATH
-TEMP_DOCKING                 = "../resources/tmp/temp_docking"
