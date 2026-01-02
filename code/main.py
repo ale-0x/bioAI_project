@@ -5,6 +5,7 @@ import multiprocessing
 import os
 import random
 import shutil
+import matplotlib.pyplot as plt
 
 from inspyred.ec            import Individual, terminators
 from inspyred.ec.evaluators import parallel_evaluation_mp
@@ -139,6 +140,9 @@ def run_peptide_ga() -> None:
 
     # 1. Setup dell'Algoritmo Evolutivo (EA)
     ea = inspyred.ec.EvolutionaryComputation(rand)
+
+    #1.1 Aggiungi un Observer
+    ea.observer = inspyred.ec.observers.file_observer # add required arguments
     
     # Imposta i parametri e le funzioni
     ea.selector = inspyred.ec.selectors.tournament_selection
@@ -175,16 +179,22 @@ def run_peptide_ga() -> None:
         'verbose'              : VERBOSE,
         'max_generations'      : MAX_GENERATIONS        # <--- Fondamentale per terminators e variators
     }
+
+    statistics_file = open(f"ga_observer_{JOB_ID}.csv", "w")
+    individuals_file = open(f"ga_individuals_{JOB_ID}.csv", "w")
     
     # Esegui l'EA
     try:
         final_pop = ea.evolve(
             generator        = peptide_generator,
             evaluator        = parallel_evaluation_mp,
+            observer         = ea.observer,
             mp_evaluator     = evaluate_peptide_binding,
             mp_num_cpus      = cpus,
             num_elites       = 1,                                       # Conserva il miglior individuo dalla generazione precedente
             
+            statistics_file  = statistics_file,
+            individuals_file = individuals_file,                        # Parametri passati all'observer
             generator_params = {'peptide_length': PEPTIDE_LENGTH},      # Parametri passati in args ai variatori
             variator_params  = {},                                      # Parametri passati a peptide_chain_variator (max_generations qui per il calcolo adattivo)
             num_generations  = MAX_GENERATIONS,
@@ -206,7 +216,7 @@ def run_peptide_ga() -> None:
                 print(color_text(COL_LIGHT_BLUE, "-" * 40))
         print(color_text(COL_LIGHT_BLUE, "=" * 40))
         
-        best_individual: Individual = max(final_pop)
+        best_individual: Individual = min(final_pop) # choose best fitness (minimize energy)
         
         print("\n--- Risultati Finali ---")
         print(f"Miglior sequenza trovata: {best_individual.candidate}")
@@ -221,14 +231,27 @@ def run_peptide_ga() -> None:
 
             f.write("")
             f.write(print_arguments(options, JOB_ID, False))
-    except Exception as e:
-        print_error(e)
+
+        statistics_file.close()
+        individuals_file.close()
+
+        plot_file = f"plots/generation_plot_{JOB_ID}.png"
+        os.makedirs("plots", exist_ok=True)  # Ensure the directory exists
+        inspyred.ec.analysis.generation_plot(open(f"ga_observer_{JOB_ID}.csv", 'r'))
+        plt.savefig(plot_file)
+        plt.close()
+        print(f"Generation plot saved to {plot_file}")
+
+    # except Exception as e:
+        # print(e)
+
     finally:
         # Rimuove l'intera cartella temporanea del job alla fine
         if os.path.exists(job_temp_dir) and not NO_DELETE:
             print(f"Pulizia cartella temporanea: {job_temp_dir} ...", end = "")
             shutil.rmtree(job_temp_dir)
             print("Done")
+    # Close the files opened for statistics and individuals
 
 if __name__ == '__main__':
     run_peptide_ga()

@@ -16,6 +16,32 @@ from utils      import print_error, print_verbose
 
 import constants as C
 
+# Hydrophobicity index at pH 7 
+# (from Monera, O. D., et al. Relationship of Sidechain Hydrophobicity and Alpha-Helical Propensity on the Stability of the Single-Stranded Amphipathic Alpha-Helix. J Pept Sci. (1995).)
+
+amino_hydrophobicity_ph7 = {
+    'L': 97,   # Leucine
+    'I': 99,   # Isoleucine
+    'F': 100,  # Phenylalanine
+    'W': 97,   # Tryptophan
+    'V': 76,   # Valine
+    'M': 74,   # Methionine
+    'C': 49,   # Cysteine
+    'Y': 63,   # Tyrosine
+    'A': 41,   # Alanine
+    'T': 13,   # Threonine
+    'E': -31,  # Glutamate
+    'H': 8,    # Histidine
+    'G': 0,    # Glycine
+    'S': -5,   # Serine
+    'Q': -10,  # Glutamine
+    'D': -55,  # Aspartate
+    'R': -14,  # Arginine
+    'K': -23,  # Lysine
+    'N': -28,  # Asparagine
+    'P': 5     # Proline (using the 6.5 value provided)
+}
+
 # --- Funzione di Generazione della Popolazione Iniziale ---
 
 def peptide_generator(random: random.Random, args: Dict[str, Any]) -> str:
@@ -309,6 +335,9 @@ def evaluate_peptide_binding(candidates: List[str], args: Dict[str, Any]) -> Lis
     for candidate in candidates:
         # Estrai la sequenza se è un oggetto Individual
         seq = candidate.candidate if hasattr(candidate, 'candidate') else candidate
+
+        # Calcola la MEDIA dei valori di idrofobicità per la sequenza
+        hydrophobicity = sum(amino_hydrophobicity_ph7.get(aa, 0) for aa in seq) / len(seq)
         
         # Crea cartella isolata per questo singolo peptide
         unique_id     = str(uuid.uuid4())
@@ -343,7 +372,8 @@ def evaluate_peptide_binding(candidates: List[str], args: Dict[str, Any]) -> Lis
                     verbose        = verbose
                 )
                 print_verbose(f"[evaluate_peptide_binding] Valutazione di Autodock Vina su '{pdbqt_file}' della sequenza '{seq}' --> Done", to_print = verbose)
-                fitnesses.append(energy)
+                # usa la hydrophobicity sum come penalità per restringere il campo di soluzioni possibili
+                fitnesses.append(energy + (hydrophobicity*C.HYDROPHOBICITY_WEIGHT))
                 print_verbose(f"[evaluate_peptide_binding] Conversione di '{pdb_file}' in '{pdbqt_file}' e centrato in ({cx}, {cy}, {cz}) della sequenza '{seq}' --> Done", to_print = verbose)
             else:
                 fitnesses.append(0.0)               # Penalità per fallimento prep

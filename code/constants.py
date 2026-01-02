@@ -5,6 +5,7 @@ __version__ = '1.0.0'
 
 from Bio.Align import substitution_matrices
 
+HYDROPHOBICITY_WEIGHT = 0.1  # Peso della somma di idrofobicità nella funzione di fitness
 SEED = 77
 
 # I 20 aminoacidi canonici (codici a una lettera)
