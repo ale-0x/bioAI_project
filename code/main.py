@@ -142,7 +142,7 @@ def run_peptide_ga() -> None:
     
     # Imposta i parametri e le funzioni
     ea.selector = inspyred.ec.selectors.tournament_selection
-    ea.replacer = inspyred.ec.replacers.generational_replacement
+    ea.replacer = inspyred.ec.replacers.plus_replacement
     
     # 2. Assegna le tue funzioni di Crossover e Mutazione
     ea.variator = peptide_chain_variator
