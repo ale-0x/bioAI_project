@@ -172,7 +172,7 @@ def prepare_ligand_openbabel(pdb_path: str, pdbqt_output_path: str, center: Tupl
         return False
     
 
-def run_vina_real(pdbqt_ligand: str, receptor_file: str, center: Tuple[float, float, float], box_size: Tuple[int, int, int], cpu: int = 1, exhaustiveness: int = C.EXHAUSTIVENESS, verbose: bool = False) -> float:
+def run_vina_real(vina_exe_path: str, pdbqt_ligand: str, receptor_file: str, center: Tuple[float, float, float], box_size: Tuple[int, int, int], cpu: int = 1, exhaustiveness: int = C.EXHAUSTIVENESS, verbose: bool = False) -> float:
     """
     Esegue il docking molecolare lanciando il processo AutoDock Vina e restituisce l'energia di legame migliore.
 
@@ -183,6 +183,9 @@ def run_vina_real(pdbqt_ligand: str, receptor_file: str, center: Tuple[float, fl
 
     Parameters
     ----------
+    vina_exe_path : `str`, default `'vina'`, optional
+        Percorso dell'eseguibile di AutoDock Vina.
+    
     ligand_pdbqt_file : `str`
         Percorso al file del ligando preparato (.pdbqt).
     
@@ -203,9 +206,6 @@ def run_vina_real(pdbqt_ligand: str, receptor_file: str, center: Tuple[float, fl
     
     cpu : `int`, default `1`, optional
         Numero di CPU/thread da dedicare a questa singola esecuzione di Vina.
-    
-    vina_exe_path : `str`, default `'vina'`, optional
-        Percorso dell'eseguibile di AutoDock Vina.
     
     verbose : `bool`, default `False`, optional
         Se `True`, stampa il comando eseguito e l'output grezzo di Vina in caso di errore.
@@ -312,6 +312,7 @@ def evaluate_peptide_binding(candidates: List[str], args: Dict[str, Any]) -> Lis
     """
     # Lettura parametri con fallback
     verbose       = args.get('verbose', False)
+    vina_exe_path = args.get('vina_exe_path', C.VINA_EXE_PATH)
     receptor_file = args.get('receptor_file', C.RECEPTOR_FILE)
     
     cx = args.get('center_x', C.CENTER_X)
@@ -363,6 +364,7 @@ def evaluate_peptide_binding(candidates: List[str], args: Dict[str, Any]) -> Lis
             if prepare_ligand_openbabel(pdb_file, pdbqt_file, (cx, cy, cz)):
                 print_verbose(f"[evaluate_peptide_binding] Valutazione di Autodock Vina su '{pdbqt_file}' della sequenza '{seq}' ...", to_print = verbose)
                 energy = run_vina_real(
+                    vina_exe_path = vina_exe_path,
                     pdbqt_ligand   = pdbqt_file,
                     receptor_file  = receptor_file,
                     center         = (cx, cy, cz),

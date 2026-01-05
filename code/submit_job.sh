@@ -1,7 +1,7 @@
 #!/bin/bash
-#SBATCH --job-name=BioInspyredAI_PeptideGA
-#SBATCH --output=../log/ga_%j.log
-#SBATCH --error=../log/ga_%j.log
+#SBATCH --job-name=clem_bioai
+#SBATCH --output=test_%j.log
+#SBATCH --error=test_%j.log
 #SBATCH --partition=edu-long
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
@@ -16,13 +16,15 @@ echo "Job started on $(hostname) at $(date)"
 source $HOME/anaconda3/etc/profile.d/conda.sh
 conda activate bioai
 
+cd $HOME/bioAI_project/code
+
 RECEPTOR=${RECEPTOR:-"../resources/pdbqt/2P3D.pdbqt"}
 TMP_BASE="../resources/tmp"
 
 echo "Lancio Job $SLURM_JOB_ID con Recettore: $RECEPTOR"
 echo "Temp Base: $TMP_BASE"
 
-python -u main.py                                               \
+python3 -u main.py                                               \
     2P3D                                                        \
     $RECEPTOR                                                   \
     --job_id                $SLURM_JOB_ID                       \
@@ -41,7 +43,7 @@ python -u main.py                                               \
     --size_y                32                                  \
     --size_z                32                                  \
     --exhaustiveness        8                                   \
-    --vina_exe_path         vina                                \
+    --vina_exe_path         /home/clemente.calabrese/.conda/envs/bioai/bin/vina                                \
     --no_delete
 
 echo "Job finished at $(date)"

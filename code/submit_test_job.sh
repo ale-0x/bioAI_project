@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=test_job
-#SBATCH --output=../log/test_%j.log
-#SBATCH --error=../log/test_%j.log
+#SBATCH --output=test_%j.log
+#SBATCH --error=test_%j.log
 #SBATCH --partition=edu-long
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
@@ -16,6 +16,8 @@ echo "Job started on $(hostname) at $(date)"
 source $HOME/anaconda3/etc/profile.d/conda.sh
 conda activate bioai
 
+cd $HOME/bioAI_project/code
+
 RECEPTOR=${RECEPTOR:-"../resources/pdbqt/2P3D.pdbqt"}
 TMP_BASE="../resources/tmp"
 
@@ -24,7 +26,7 @@ echo "Temp Base: $TMP_BASE"
 
 # python main.py --help
 
-python -u main.py                                               \
+python3 -u main.py                                               \
     2P3D                                                        \
     $RECEPTOR                                                   \
     --job_id                $SLURM_JOB_ID                       \
