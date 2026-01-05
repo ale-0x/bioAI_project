@@ -226,7 +226,7 @@ def run_vina_real(pdbqt_ligand: str, receptor_file: str, center: Tuple[float, fl
         return 0.0
             
     cmd = [
-        "vina",
+        vina_exe_path,
         "--receptor"      , str(receptor_file),
         "--ligand"        , str(pdbqt_ligand),
         "--center_x"      , str(center[0]),
