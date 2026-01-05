@@ -1,0 +1,31 @@
+ID       : 359331
+Receptor : ../resources/pdbqt/2P3D.pdbqt
+Sequence : PTHYSETHIV
+Fitness  : 2.49
+[0;36m
+========================================[0m
+[0;36m CONFIGURAZIONE JOB: 359331[0m
+[0;36m========================================[0m
+[0;36mreceptor_name         : 2P3D[0m
+[0;36mreceptor_file         : ../resources/pdbqt/2P3D.pdbqt[0m
+[0;36mjob_id                : 359331[0m
+[0;36mcpus                  : 8[0m
+[0;36mpeptide_length        : 1[0m
+[0;36mpopulation_size       : 1[0m
+[0;36mgenerations           : 3[0m
+[0;36minitial_mutation_rate : 0.3[0m
+[0;36mfinal_mutation_rate   : 0.05[0m
+[0;36mtemp_dir_base         : ../resources/tmp[0m
+[0;36moutput                : ../results/result_359331.txt[0m
+[0;36mcenter_x              : 8.084[0m
+[0;36mcenter_y              : -13.829[0m
+[0;36mcenter_z              : -0.14[0m
+[0;36msize_x                : 32[0m
+[0;36msize_y                : 32[0m
+[0;36msize_z                : 32[0m
+[0;36mexhaustiveness        : 1[0m
+[0;36mvina_exe_path         : vina[0m
+[0;36mno_delete             : True[0m
+[0;36mverbose               : False[0m
+[0;36m========================================
+[0m
