@@ -167,22 +167,13 @@ def print_verbose(*values: object, to_print: bool = True, sep: str | None = " ",
         If `True`, flush the buffer immediately.
     """
     if to_print:
-        if file.isatty():
-            print(
-                *(COL_YELLOW, VERB, *values, COL_RESET),
-                sep = sep,
-                end = end,
-                file = file,
-                flush = flush
-            )
-        else:
-            print(
-                *(VERB, *values),
-                sep = sep,
-                end = end,
-                file = file,
-                flush = flush
-            )
+        print(
+            *(VERB, *values),
+            sep = sep,
+            end = end,
+            file = file,
+            flush = flush
+        )
 
 def print_warning(*values: object, to_print: bool = True, sep: str | None = " ", end: str | None = "\n", file = None, flush: Literal[False] = False) -> None:
     """
