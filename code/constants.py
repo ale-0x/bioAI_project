@@ -29,6 +29,7 @@ POPULATION_SIZE = 40                                # Dimensione della popolazio
 MAX_GENERATIONS = 30                               # Numero massimo di generazioni
 
 # --- Parametri Adattivi (Strategia Esplorazione -> Sfruttamento) ---
+CROSSOVER_PROBABILITY = 1.0                         # Probabilità che il crossover avvenga: 100% fa sempre il crossover
 INITIAL_MUTATION_RATE = 0.30                        # 30% all'inizio (Alto caos/esplorazione)
 FINAL_MUTATION_RATE   = 0.05                        # 5% alla fine (Raffinamento/sfruttamento)
 

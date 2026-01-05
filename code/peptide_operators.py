@@ -266,8 +266,14 @@ def peptide_chain_variator(
         parent1 = candidates[i]
         parent2 = candidates[i+1]
         
-        # 1. Esegui il Crossover (Restituisce una lista di 2 stringhe)
-        children_sequences: List[str] = single_point_crossover(random, parent1, parent2)
+        # 1. Esegui il Crossover in base a una probabilità
+        if random.random() < C.CROSSOVER_PROBABILITY:
+            children_sequences: List[str] = single_point_crossover(random, parent1, parent2)
+        else:
+            # Se non avviene il crossover, i figli sono copie dei genitori
+            parent1_str = parent1.candidate if isinstance(parent1, Individual) else str(parent1)
+            parent2_str = parent2.candidate if isinstance(parent2, Individual) else str(parent2)
+            children_sequences = [parent1_str, parent2_str]
         
         # 2. Esegui la Mutazione su ciascun figlio
         for child_seq in children_sequences:
