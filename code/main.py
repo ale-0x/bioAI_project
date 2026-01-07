@@ -235,12 +235,9 @@ def run_peptide_ga() -> None:
         statistics_file.close()
         individuals_file.close()
 
-        plot_file = f"plots/generation_plot_{JOB_ID}.png"
         os.makedirs("plots", exist_ok=True)  # Ensure the directory exists
-        inspyred.ec.analysis.generation_plot(open(f"ga_observer_{JOB_ID}.csv", 'r'))
-        plt.savefig(plot_file)
-        plt.close()
-        print(f"Generation plot saved to {plot_file}")
+        plots.plot_observer_statistics(observer_file_path = f"ga_observer_{JOB_ID}.csv")
+        plots.plot_energy_vs_hydrophobicity(individuals_file=f"ga_individuals_{JOB_ID}.csv")
 
     # except Exception as e:
         # print(e)

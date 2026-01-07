@@ -6,6 +6,38 @@ __version__ = '1.0.0'
 from Bio.Align import substitution_matrices
 
 HYDROPHOBICITY_WEIGHT = 0.1  # Peso della somma di idrofobicità nella funzione di fitness
+
+# Hydrophobicity index at pH 7 
+# (from Monera, O. D., et al. Relationship of Sidechain Hydrophobicity and Alpha-Helical Propensity on the Stability of the Single-Stranded Amphipathic Alpha-Helix. J Pept Sci. (1995).)
+amino_hydrophobicity_ph7 = {
+    'L': 97,   # Leucine
+    'I': 99,   # Isoleucine
+    'F': 100,  # Phenylalanine
+    'W': 97,   # Tryptophan
+    'V': 76,   # Valine
+    'M': 74,   # Methionine
+    'C': 49,   # Cysteine
+    'Y': 63,   # Tyrosine
+    'A': 41,   # Alanine
+    'T': 13,   # Threonine
+    'E': -31,  # Glutamate
+    'H': 8,    # Histidine
+    'G': 0,    # Glycine
+    'S': -5,   # Serine
+    'Q': -10,  # Glutamine
+    'D': -55,  # Aspartate
+    'R': -14,  # Arginine
+    'K': -23,  # Lysine
+    'N': -28,  # Asparagine
+    'P': 5     # Proline (using the 6.5 value provided)
+}
+
+# Calcola la MEDIA dei valori di idrofobicità per la sequenza
+def get_hydrophobicity(peptide: str) -> float:
+    """Calcola l'idrofobicità media di una sequenza peptidica."""
+    average_hydrophobicity = sum(amino_hydrophobicity_ph7.get(aa, 0) for aa in peptide) / len(peptide)
+    return average_hydrophobicity
+
 SEED = 77
 
 # I 20 aminoacidi canonici (codici a una lettera)
