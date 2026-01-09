@@ -288,6 +288,7 @@ def evaluate_peptide_binding(candidates: List[str], args: Dict[str, Any]) -> Lis
     verbose       = args.get('verbose', False)
     vina_exe_path = args.get('vina_exe_path', C.VINA_EXE_PATH)
     receptor_file = args.get('receptor_file', C.RECEPTOR_FILE)
+    generation_num = args.get('generation_num', 0)
     
     cx = args.get('center_x', C.CENTER_X)
     cy = args.get('center_y', C.CENTER_Y)
@@ -314,14 +315,12 @@ def evaluate_peptide_binding(candidates: List[str], args: Dict[str, Any]) -> Lis
         hydrophobicity = C.get_hydrophobicity(seq)
         
         # Crea cartella isolata per questo singolo peptide
-        unique_id     = str(uuid.uuid4())
-        unique_folder = f"p_{unique_id}"
+        unique_folder = f"p_{seq}_{JOB_ID}"
         work_dir      = os.path.join(base_temp, unique_folder)
-        print_verbose(f"[evaluate_peptide_binding] Creazione directory temporanea '{base_temp}' ...", to_print = verbose)
         os.makedirs(work_dir, exist_ok = True)
-        print_verbose(f"[evaluate_peptide_binding] Creazione directory temporanea '{base_temp}' ...", to_print = verbose)
-
-        base_name  = os.path.join(work_dir, f"seq_{unique_id}")
+        print_verbose(f"[evaluate_peptide_binding] Creazione directory temporanea '{work_dir}' ...", to_print = verbose)
+        unique_id     = f"{seq}_{JOB_ID}_gen{generation_num}" # if same sequence in same gen, overwrite
+        base_name  = os.path.join(work_dir, unique_id)
         pdb_file   = f"{base_name}.pdb"
         pdbqt_file = f"{base_name}.pdbqt"
         out_file   = f"{base_name}_out.pdbqt"

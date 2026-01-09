@@ -180,8 +180,11 @@ def run_peptide_ga() -> None:
         'max_generations'      : MAX_GENERATIONS        # <--- Fondamentale per terminators e variators
     }
 
-    statistics_file = open(f"ga_observer_{JOB_ID}.csv", "w")
-    individuals_file = open(f"ga_individuals_{JOB_ID}.csv", "w")
+    statistics_filepath = f"../observer/ga_observer_{JOB_ID}.csv"
+    individuals_filepath = f"../observer/ga_individuals_{JOB_ID}.csv"
+
+    statistics_file = open(statistics_filepath, 'w')
+    individuals_file = open(individuals_filepath, 'w')
     
     # Esegui l'EA
     try:
@@ -191,7 +194,7 @@ def run_peptide_ga() -> None:
             observer         = ea.observer,
             mp_evaluator     = evaluate_peptide_binding,
             mp_num_cpus      = cpus,
-            num_elites       = 1,                                       # Conserva il miglior individuo dalla generazione precedente
+            # num_elites       = POPULATION_SIZE,                                       # Conserva il miglior individuo dalla generazione precedente
             
             statistics_file  = statistics_file,
             individuals_file = individuals_file,                        # Parametri passati all'observer
@@ -199,6 +202,7 @@ def run_peptide_ga() -> None:
             variator_params  = {},                                      # Parametri passati a peptide_chain_variator (max_generations qui per il calcolo adattivo)
             num_generations  = MAX_GENERATIONS,
             pop_size         = POPULATION_SIZE,
+            # num_offspring    = POPULATION_SIZE,
             maximize         = False,                                   # Vina: Più negativo è meglio. Quindi vogliamo minimizzare
 
             **ga_config
@@ -211,6 +215,7 @@ def run_peptide_ga() -> None:
             assert isinstance(individual, Individual)
             print(color_text(COL_LIGHT_BLUE, f" Individual {i}\n\t- Candidate : {individual.candidate}"))
             print(color_text(COL_LIGHT_BLUE, f"\t- Fitness   : {individual.fitness}"))
+            print(color_text(COL_LIGHT_BLUE, f"\t- Binding Energy   : {individual.fitness - (C.get_hydrophobicity(individual.candidate)*C.HYDROPHOBICITY_WEIGHT)}"))
             print(color_text(COL_LIGHT_BLUE, f"\t- Birthdate : {individual.birthdate}\n"))
             if i < len(final_pop) - 1:
                 print(color_text(COL_LIGHT_BLUE, "-" * 40))
@@ -228,16 +233,27 @@ def run_peptide_ga() -> None:
             f.write(f"Receptor : {RECEPTOR_FILE}\n")
             f.write(f"Sequence : {best_individual.candidate}\n")
             f.write(f"Fitness  : {best_individual.fitness}\n")
-
             f.write("")
             f.write(print_arguments(options, JOB_ID, False))
+
+        unique_folder = f"p_{best_individual.candidate}_{JOB_ID}"
+        work_dir      = os.path.join(TEMP_DIR_BASE, unique_folder)
+        unique_id     = f"{best_individual.candidate}_{JOB_ID}" # if same sequence in same gen, overwrite
+        base_name  = os.path.join(work_dir, unique_id)
+        pdb_file   = f"{base_name}.pdb"
+        pdbqt_file = f"{base_name}.pdbqt"
+
+        output_dir = os.path.dirname(os.path.abspath(OUTPUT)) # results folder (destination)
+        
+        subprocess.run(["cp", pdb_file, output_dir], check=True)
+        subprocess.run(["cp", pdbqt_file, output_dir], check=True) # 🍀
 
         statistics_file.close()
         individuals_file.close()
 
         os.makedirs("plots", exist_ok=True)  # Ensure the directory exists
-        plots.plot_observer_statistics(observer_file_path = f"ga_observer_{JOB_ID}.csv")
-        plots.plot_energy_vs_hydrophobicity(individuals_file=f"ga_individuals_{JOB_ID}.csv")
+        plots.plot_observer_statistics(observer_file_path = statistics_filepath)
+        plots.plot_energy_vs_hydrophobicity(individuals_file = individuals_filepath)
 
     # except Exception as e:
         # print(e)
