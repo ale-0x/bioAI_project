@@ -281,3 +281,9 @@ def peptide_chain_variator(
             new_population.append(mutated_child)
             
     return new_population
+
+# --- Hydrophobucity ---
+def get_hydrophobicity(peptide: str) -> float:
+    """Calcola l'idrofobicità media di una sequenza peptidica."""
+    average_hydrophobicity = sum(C.AMINO_HYDROPHOBICITY_PH7.get(aa, 0) for aa in peptide) / len(peptide)
+    return average_hydrophobicity

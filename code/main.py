@@ -1,11 +1,12 @@
 # main.py
 import argparse
 import inspyred.ec
+import matplotlib.pyplot as plt
 import multiprocessing
 import os
 import random
 import shutil
-import matplotlib.pyplot as plt
+import subprocess
 
 from inspyred.ec            import Individual, terminators
 from inspyred.ec.evaluators import parallel_evaluation_mp
@@ -15,8 +16,9 @@ from typing                 import Any, Optional
 import constants as C
 
 from ga_problem             import evaluate_peptide_binding, peptide_generator
-from utils                  import COL_LIGHT_BLUE, color_text, print_info, print_error
+from utils                  import COL_LIGHT_BLUE, color_text, print_info, print_error, print_verbose
 from peptide_operators      import blosum_peptide_mutator, peptide_chain_variator, single_point_crossover
+from plots                  import plot_energy_vs_hydrophobicity, plot_observer_statistics
 
 def parse_arguments() -> argparse.Namespace:
     """
@@ -63,13 +65,13 @@ def parse_arguments() -> argparse.Namespace:
 
 def print_arguments(arguments: argparse.Namespace, name = "", to_print: bool = True) -> str | None:
     output = list()
-    output.append(color_text(COL_LIGHT_BLUE, "\n" + "="*40))
-    output.append(color_text(COL_LIGHT_BLUE, f" CONFIGURAZIONE JOB: {name}"))
-    output.append(color_text(COL_LIGHT_BLUE, "="*40))
+    output.append("\n" + "="*40)
+    output.append(f" CONFIGURAZIONE JOB: {name}")
+    output.append("="*40)
         
     for key, value in vars(arguments).items():
-        output.append(color_text(COL_LIGHT_BLUE, f"{key.ljust(22)}: {value}"))
-    output.append(color_text(COL_LIGHT_BLUE, "="*40 + "\n"))
+        output.append(f"{key.ljust(22)}: {value}")
+    output.append("="*40 + "\n")
 
     if to_print:
         print("\n".join(output))
@@ -133,7 +135,14 @@ def run_peptide_ga() -> None:
     rand.seed(C.SEED)                # Seed per la riproducibilità
 
     job_temp_dir = os.path.join(TEMP_DIR_BASE, f"bioai_ga_{JOB_ID}")
-    os.makedirs(job_temp_dir, exist_ok = True)
+    if not os.path.exists(job_temp_dir):
+        print_verbose(f"[run_peptide_ga] Creazione directory temporanea '{job_temp_dir}' ...", to_print = VERBOSE)
+        os.makedirs(job_temp_dir, exist_ok = True)
+        if os.path.exists(job_temp_dir):
+            print_verbose(f"[run_peptide_ga] Done.", to_print = VERBOSE)
+        else:
+            print_error(f"[run_peptide_ga] Directory temporanea '{job_temp_dir}' non creata!", code = -1)
+    
 
     print(f"--- Avvio Algoritmo Genetico (Peptide Length: {PEPTIDE_LENGTH}) ---")
     print(f"Popolazione: {POPULATION_SIZE}, Generazioni: {MAX_GENERATIONS}")
@@ -177,7 +186,8 @@ def run_peptide_ga() -> None:
         'vina_exe_path'        : VINA_EXE_PATH,
         'no_delete'            : NO_DELETE,
         'verbose'              : VERBOSE,
-        'max_generations'      : MAX_GENERATIONS        # <--- Fondamentale per terminators e variators
+        'max_generations'      : MAX_GENERATIONS,        # <--- Fondamentale per terminators e variators
+        'job_id'               : JOB_ID,
     }
 
     statistics_filepath = f"../observer/ga_observer_{JOB_ID}.csv"
@@ -194,7 +204,7 @@ def run_peptide_ga() -> None:
             observer         = ea.observer,
             mp_evaluator     = evaluate_peptide_binding,
             mp_num_cpus      = cpus,
-            # num_elites       = POPULATION_SIZE,                                       # Conserva il miglior individuo dalla generazione precedente
+            # num_elites       = 1,                                       # Conserva il miglior individuo dalla generazione precedente
             
             statistics_file  = statistics_file,
             individuals_file = individuals_file,                        # Parametri passati all'observer
@@ -208,18 +218,18 @@ def run_peptide_ga() -> None:
             **ga_config
         )
 
-        print(color_text(COL_LIGHT_BLUE, "\n" + "=" * 40))
-        print(color_text(COL_LIGHT_BLUE, f"           POPOLAZIONE FINALE           "))
-        print(color_text(COL_LIGHT_BLUE, "=" * 40))
+        print("\n" + "=" * 40)
+        print(f"           POPOLAZIONE FINALE           ")
+        print("=" * 40)
         for i, individual in enumerate(final_pop):
             assert isinstance(individual, Individual)
-            print(color_text(COL_LIGHT_BLUE, f" Individual {i}\n\t- Candidate : {individual.candidate}"))
-            print(color_text(COL_LIGHT_BLUE, f"\t- Fitness   : {individual.fitness}"))
-            print(color_text(COL_LIGHT_BLUE, f"\t- Binding Energy   : {individual.fitness - (C.get_hydrophobicity(individual.candidate)*C.HYDROPHOBICITY_WEIGHT)}"))
-            print(color_text(COL_LIGHT_BLUE, f"\t- Birthdate : {individual.birthdate}\n"))
+            print(f" Individual {i}\n\t- Candidate : {individual.candidate}")
+            print(f"\t- Fitness          : {individual.fitness}")
+            print(f"\t- Binding Energy   : {individual.fitness - (C.get_hydrophobicity(individual.candidate)*C.HYDROPHOBICITY_WEIGHT)}")
+            print(f"\t- Birthdate        : {individual.birthdate}\n")
             if i < len(final_pop) - 1:
-                print(color_text(COL_LIGHT_BLUE, "-" * 40))
-        print(color_text(COL_LIGHT_BLUE, "=" * 40))
+                print("-" * 40)
+        print("=" * 40)
         
         best_individual: Individual = min(final_pop) # choose best fitness (minimize energy)
         
@@ -238,22 +248,22 @@ def run_peptide_ga() -> None:
 
         unique_folder = f"p_{best_individual.candidate}_{JOB_ID}"
         work_dir      = os.path.join(TEMP_DIR_BASE, unique_folder)
-        unique_id     = f"{best_individual.candidate}_{JOB_ID}" # if same sequence in same gen, overwrite
-        base_name  = os.path.join(work_dir, unique_id)
-        pdb_file   = f"{base_name}.pdb"
-        pdbqt_file = f"{base_name}.pdbqt"
+        unique_id     = f"{best_individual.candidate}_{JOB_ID}"         # if same sequence in same gen, overwrite
+        base_name     = os.path.join(work_dir, unique_id)
+        pdb_file      = f"{base_name}.pdb"
+        pdbqt_file    = f"{base_name}.pdbqt"
 
-        output_dir = os.path.dirname(os.path.abspath(OUTPUT)) # results folder (destination)
+        output_dir = os.path.dirname(os.path.abspath(OUTPUT))           # results folder (destination)
         
-        subprocess.run(["cp", pdb_file, output_dir], check=True)
-        subprocess.run(["cp", pdbqt_file, output_dir], check=True) # 🍀
+        subprocess.run(["cp", pdb_file, output_dir]  , check = True)
+        subprocess.run(["cp", pdbqt_file, output_dir], check = True) # 🍀
 
         statistics_file.close()
         individuals_file.close()
 
-        os.makedirs("plots", exist_ok=True)  # Ensure the directory exists
-        plots.plot_observer_statistics(observer_file_path = statistics_filepath)
-        plots.plot_energy_vs_hydrophobicity(individuals_file = individuals_filepath)
+        os.makedirs("../plots", exist_ok = True)  # Ensure the directory exists
+        plot_observer_statistics(observer_file_path = statistics_filepath)
+        plot_energy_vs_hydrophobicity(individuals_file = individuals_filepath)
 
     # except Exception as e:
         # print(e)

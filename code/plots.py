@@ -1,17 +1,20 @@
-import matplotlib.pyplot as plt
 import inspyred.ec.analysis
-from inspyred.ec import Individual
-import constants as C
-import random
+import matplotlib.pyplot as plt
 import os
-from matplotlib.colors import LinearSegmentedColormap
+import random
+
+from inspyred.ec        import Individual
+from matplotlib.colors  import LinearSegmentedColormap
+
+
+import constants as C
 
 gradient_map = LinearSegmentedColormap.from_list("custom_gradient", ['#FF0000', '#FFFF00'])
 
 def plot_observer_statistics(observer_file_path: str) -> None:
 
-    job_id = os.path.basename(individuals_file).split('_')[-1].split('.')[0]
-    plot_file = f"plots/generation_plot_{job_id}.png"
+    job_id = os.path.basename(observer_file_path).split('_')[-1].split('.')[0]
+    plot_file = f"../plots/generation_plot_{job_id}.png"
     inspyred.ec.analysis.generation_plot(open(observer_file_path, 'r'))
     plt.savefig(plot_file)
     plt.close()
@@ -82,7 +85,7 @@ def plot_energy_vs_hydrophobicity(individuals_file: str) -> None:
     ax.set_title(f'Energy vs Hydrophobicity')
     ax.grid(True, alpha=0.3)
 
-    scatter_plot_file = f"plots/energy_hydrophobicity_{job_id}.png"
+    scatter_plot_file = f"../plots/energy_hydrophobicity_{job_id}.png"
     plt.savefig(scatter_plot_file, dpi=150, bbox_inches='tight')
     plt.close()
     print(f"Energy vs Hydrophobicity plot saved to {scatter_plot_file}")
