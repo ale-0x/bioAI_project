@@ -205,7 +205,7 @@ def blosum_peptide_mutator(
     mutated_sequence    : List[str] = list(candidate)
     
     for i in range(len(mutated_sequence)):
-        if random.random() < mutation_probability:
+        if random.random() <= mutation_probability:
             original_aa        : str = mutated_sequence[i]
             targets, weights         = get_blosum_weights(original_aa, args) # Passiamo args anche qui
             new_amino_acid     : str = random.choices(targets, weights = weights, k = 1)[0]
@@ -267,7 +267,7 @@ def peptide_chain_variator(
         parent2 = candidates[i+1]
         
         # 1. Esegui il Crossover in base a una probabilità
-        if random.random() < C.CROSSOVER_PROBABILITY:
+        if random.random() <= C.CROSSOVER_PROBABILITY:
             children_sequences: List[str] = single_point_crossover(random, parent1, parent2)
         else:
             # Se non avviene il crossover, i figli sono copie dei genitori

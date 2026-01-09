@@ -42,7 +42,7 @@ def plot_energy_vs_hydrophobicity(individuals_file: str) -> None:
 
     # Plot individuals with color based on age
     for ind in [ind for array in generations_dict.values() for ind in array]:
-        energy = ind.fitness  # x-axis: energy
+        energy = ind.fitness - ind.hydrophobicity*C.HYDROPHOBICITY_WEIGHT  # x-axis: energy
         hydrophobicity = ind.hydrophobicity  # y-axis: hydrophobicity calculation
         age = ind.birthdate
         color_value = age / max_gen if max_gen > 0 else 0
