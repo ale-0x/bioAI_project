@@ -11,10 +11,12 @@ from openbabel  import openbabel, pybel
 from rdkit      import Chem
 from rdkit.Chem import AllChem
 from typing     import Any, Dict, List, Tuple
-from utils      import print_error, print_verbose
 
 
 import constants as C
+
+from peptide_operators import get_hydrophobicity
+from utils      import print_error, print_verbose
 
 # --- Funzione di Generazione della Popolazione Iniziale ---
 
@@ -146,7 +148,7 @@ def prepare_ligand_openbabel(pdb_path: str, pdbqt_output_path: str, center: Tupl
         return False
     
 
-def run_vina_real(vina_exe_path: str, pdbqt_ligand: str, receptor_file: str, center: Tuple[float, float, float], box_size: Tuple[int, int, int], cpu: int = 1, exhaustiveness: int = C.EXHAUSTIVENESS, verbose: bool = False) -> float:
+def run_vina_real(vina_exe_path: str, pdbqt_ligand: str, receptor_file: str, center: Tuple[float, float, float], box_size: Tuple[int, int, int], vina_output: str, cpu: int = 1, exhaustiveness: int = C.EXHAUSTIVENESS, verbose: bool = False) -> float:
     """
     Esegue il docking molecolare lanciando il processo AutoDock Vina e restituisce l'energia di legame migliore.
 
@@ -157,7 +159,7 @@ def run_vina_real(vina_exe_path: str, pdbqt_ligand: str, receptor_file: str, cen
 
     Parameters
     ----------
-    vina_exe_path : `str`, default `'vina'`, optional
+    vina_exe_path : `str`
         Percorso dell'eseguibile di AutoDock Vina.
     
     ligand_pdbqt_file : `str`
@@ -177,6 +179,9 @@ def run_vina_real(vina_exe_path: str, pdbqt_ligand: str, receptor_file: str, cen
     
     exhaustiveness : `int`, default `8`, optional
         Parametro di esaustività della ricerca globale di Vina (valori più alti = ricerca più accurata ma lenta).
+    
+    vina_output : `str`
+        Output file di AutoDock Vina.
     
     cpu : `int`, default `1`, optional
         Numero di CPU/thread da dedicare a questa singola esecuzione di Vina.
@@ -285,9 +290,10 @@ def evaluate_peptide_binding(candidates: List[str], args: Dict[str, Any]) -> Lis
         Lista dei valori di fitness (kcal/mol). Valori più bassi indicano legami migliori.
     """
     # Lettura parametri con fallback
-    verbose       = args.get('verbose', False)
-    vina_exe_path = args.get('vina_exe_path', C.VINA_EXE_PATH)
-    receptor_file = args.get('receptor_file', C.RECEPTOR_FILE)
+    job_id         = args.get('job_id', str(uuid.uuid4()))
+    verbose        = args.get('verbose', False)
+    vina_exe_path  = args.get('vina_exe_path', C.VINA_EXE_PATH)
+    receptor_file  = args.get('receptor_file', C.RECEPTOR_FILE)
     generation_num = args.get('generation_num', 0)
     
     cx = args.get('center_x', C.CENTER_X)
@@ -300,11 +306,14 @@ def evaluate_peptide_binding(candidates: List[str], args: Dict[str, Any]) -> Lis
 
     # Cartella temporanea del JOB (deve esistere, creata da main.py)
     # Se per qualche motivo non c'è, usa /tmp locale con fallback
-    base_temp = args.get('temp_dir', f"/tmp/ga_fallback_{uuid.uuid4()}")
+    base_temp = args.get('temp_dir', f"tmp/bioai_ga_{job_id}")
     if not os.path.exists(base_temp):
         print_verbose(f"[evaluate_peptide_binding] Creazione directory temporanea '{base_temp}' ...", to_print = verbose)
         os.makedirs(base_temp, exist_ok = True)
-        print_verbose(f"[evaluate_peptide_binding] Done.", to_print = verbose)
+        if os.path.exists(base_temp):
+            print_verbose(f"[evaluate_peptide_binding] Done.", to_print = verbose)
+        else:
+            print_error(f"[evaluate_peptide_binding] Directory temporanea '{base_temp}' non creata!", code = -1)
 
     fitnesses = []
 
@@ -312,15 +321,21 @@ def evaluate_peptide_binding(candidates: List[str], args: Dict[str, Any]) -> Lis
         # Estrai la sequenza se è un oggetto Individual
         seq = candidate.candidate if hasattr(candidate, 'candidate') else candidate
 
-        hydrophobicity = C.get_hydrophobicity(seq)
+        hydrophobicity = get_hydrophobicity(seq)
         
         # Crea cartella isolata per questo singolo peptide
-        unique_folder = f"p_{seq}_{JOB_ID}"
-        work_dir      = os.path.join(base_temp, unique_folder)
-        os.makedirs(work_dir, exist_ok = True)
-        print_verbose(f"[evaluate_peptide_binding] Creazione directory temporanea '{work_dir}' ...", to_print = verbose)
-        unique_id     = f"{seq}_{JOB_ID}_gen{generation_num}" # if same sequence in same gen, overwrite
-        base_name  = os.path.join(work_dir, unique_id)
+        unique_folder = f"p_{seq}_{job_id}"
+        peptide_dir   = os.path.join(base_temp, unique_folder)
+
+        print_verbose(f"[evaluate_peptide_binding] Creazione directory peptide '{seq}' in '{peptide_dir}' ...", to_print = verbose)
+        os.makedirs(peptide_dir, exist_ok = True)
+        if os.path.exists(peptide_dir):
+            print_verbose(f"[evaluate_peptide_binding] Done.", to_print = verbose)
+        else:
+            print_error(f"[evaluate_peptide_binding] Directory peptide '{seq}' in '{peptide_dir}' non creata!", code = -1)
+
+        unique_id     = f"{seq}_{job_id}_gen{generation_num}" # if same sequence in same gen, overwrite
+        base_name  = os.path.join(peptide_dir, unique_id)
         pdb_file   = f"{base_name}.pdb"
         pdbqt_file = f"{base_name}.pdbqt"
         out_file   = f"{base_name}_out.pdbqt"
@@ -336,18 +351,20 @@ def evaluate_peptide_binding(candidates: List[str], args: Dict[str, Any]) -> Lis
             if prepare_ligand_openbabel(pdb_file, pdbqt_file, (cx, cy, cz)):
                 print_verbose(f"[evaluate_peptide_binding] Valutazione di Autodock Vina su '{pdbqt_file}' della sequenza '{seq}' ...", to_print = verbose)
                 energy = run_vina_real(
-                    vina_exe_path = vina_exe_path,
+                    vina_exe_path  = vina_exe_path,
                     pdbqt_ligand   = pdbqt_file,
                     receptor_file  = receptor_file,
                     center         = (cx, cy, cz),
                     box_size       = (sx, sy, sz),
+                    vina_output    = out_file,
                     cpu            = 1,             # 1 CPU per processo figlio
                     exhaustiveness = args.get('exhaustiveness', C.EXHAUSTIVENESS),
                     verbose        = verbose
                 )
                 print_verbose(f"[evaluate_peptide_binding] Valutazione di Autodock Vina su '{pdbqt_file}' della sequenza '{seq}' --> Done", to_print = verbose)
+                
                 # usa la hydrophobicity average come penalità per restringere il campo di soluzioni possibili
-                fitnesses.append(energy + (hydrophobicity*C.HYDROPHOBICITY_WEIGHT))
+                fitnesses.append(energy + (hydrophobicity * C.HYDROPHOBICITY_WEIGHT))
                 print_verbose(f"[evaluate_peptide_binding] Conversione di '{pdb_file}' in '{pdbqt_file}' e centrato in ({cx}, {cy}, {cz}) della sequenza '{seq}' --> Done", to_print = verbose)
             else:
                 fitnesses.append(0.0)               # Penalità per fallimento prep
@@ -358,7 +375,7 @@ def evaluate_peptide_binding(candidates: List[str], args: Dict[str, Any]) -> Lis
             fitnesses.append(0.0)                   # Penalità massima in caso di fallimento
         finally:
             # Pulizia: rimuovi la cartella del singolo peptide
-            if os.path.exists(work_dir) and not args.get("no_delete", False):
-                shutil.rmtree(work_dir)
+            if os.path.exists(peptide_dir) and not args.get("no_delete", False):
+                shutil.rmtree(peptide_dir)
             
     return fitnesses
