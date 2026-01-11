@@ -6,7 +6,7 @@ from typing import List, Tuple, Dict, Any, TYPE_CHECKING
 
 import constants as C
 
-from utils import print_verbose
+from utils import print_verbose, print_error
 
 # Solo per l'hinting, evitando dipendenze cicliche o problemi di runtime
 if TYPE_CHECKING:
@@ -53,6 +53,10 @@ def single_point_crossover(
 
     child1: str = parent1_str[:crossover_point] + parent2_str[crossover_point:]
     child2: str = parent2_str[:crossover_point] + parent1_str[crossover_point:]
+
+    # just for testing the correct result, to use without custom length or in/dels
+    if len(child1) < C.PEPTIDE_LENGTH or len(child2) C.PEPTIDE_LENGTH:
+        print_error(f"The children produced don't have required length: {len(child1)}, {len(child2)}", code = -1)
 
     return [child1, child2]
 
@@ -211,6 +215,11 @@ def blosum_peptide_mutator(
             new_amino_acid     : str = random.choices(targets, weights = weights, k = 1)[0]
             mutated_sequence[i]      = new_amino_acid
 
+    
+    # just for testing the correct result, to use with no custom length or in/dels
+    if len("".join(mtated_sequence)) < C.PEPTIDE_LENGTH:
+        print_error(f"The mutation produced a peptide of length {len("".join(mutated_sequence))}", code = -1)
+    
     return "".join(mutated_sequence)
 
 
@@ -248,6 +257,11 @@ def peptide_chain_variator(
     print_verbose("peptide_chain_variator:", args)
     # Inizializza la lista per i nuovi figli
     new_population: List[str] = []
+
+    # just for testing, to use without custom population size
+    if len(candidates) < C.POPULATION_SIZE:
+        print_error(f"The 'evolve' operator caused a reduction in the population size, producing a population of {len(candidates)}", code = -1)
+    
     
     # Itera sulla lista dei candidati (genitori) a passi di 2
     for i in range(0, len(candidates), 2):
@@ -279,7 +293,11 @@ def peptide_chain_variator(
         for child_seq in children_sequences:
             mutated_child: str = blosum_peptide_mutator(random, child_seq, args)
             new_population.append(mutated_child)
-            
+
+    # just for testing, to use without custom population size
+    if len(new_population) < C.POPULATION_SIZE:
+        print_error(f"The variator caused a reduction in the population size, creating only {len(new_population)} individuals"), code = -1)
+    
     return new_population
 
 # --- Hydrophobucity ---
