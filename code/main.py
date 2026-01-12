@@ -148,7 +148,7 @@ def run_peptide_ga() -> None:
     print(f"Popolazione: {POPULATION_SIZE}, Generazioni: {MAX_GENERATIONS}")
 
     # 1. Setup dell'Algoritmo Evolutivo (EA)
-    ea = inspyred.ec.EvolutionaryComputation(rand)
+    ea = inspyred.ec.GA(rand)
 
     #1.1 Aggiungi un Observer
     ea.observer = inspyred.ec.observers.file_observer # add required arguments
@@ -188,6 +188,7 @@ def run_peptide_ga() -> None:
         'verbose'              : VERBOSE,
         'max_generations'      : MAX_GENERATIONS,        # <--- Fondamentale per terminators e variators
         'job_id'               : JOB_ID,
+        'peptide_length'       : PEPTIDE_LENGTH,
     }
 
     statistics_filepath = f"../observer/ga_observer_{JOB_ID}.csv"
@@ -204,7 +205,7 @@ def run_peptide_ga() -> None:
             observer         = ea.observer,
             mp_evaluator     = evaluate_peptide_binding,
             mp_num_cpus      = cpus,
-            # num_elites       = 1,                                       # Conserva il miglior individuo dalla generazione precedente
+            num_elites       = 1,                                       # Conserva il miglior individuo dalla generazione precedente
             
             statistics_file  = statistics_file,
             individuals_file = individuals_file,                        # Parametri passati all'observer
@@ -212,7 +213,7 @@ def run_peptide_ga() -> None:
             variator_params  = {},                                      # Parametri passati a peptide_chain_variator (max_generations qui per il calcolo adattivo)
             num_generations  = MAX_GENERATIONS,
             pop_size         = POPULATION_SIZE,
-            # num_offspring    = POPULATION_SIZE,
+            num_offspring    = POPULATION_SIZE,
             maximize         = False,                                   # Vina: Più negativo è meglio. Quindi vogliamo minimizzare
 
             **ga_config
