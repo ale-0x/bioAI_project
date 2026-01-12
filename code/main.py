@@ -17,7 +17,7 @@ import constants as C
 
 from ga_problem             import evaluate_peptide_binding, peptide_generator
 from utils                  import COL_LIGHT_BLUE, color_text, print_info, print_error, print_verbose
-from peptide_operators      import blosum_peptide_mutator, peptide_chain_variator, single_point_crossover
+from peptide_operators      import blosum_peptide_mutator, get_hydrophobicity, peptide_chain_variator, single_point_crossover
 from plots                  import plot_energy_vs_hydrophobicity, plot_observer_statistics
 
 def parse_arguments() -> argparse.Namespace:
@@ -171,111 +171,112 @@ def run_peptide_ga() -> None:
     # 4. Imposta il terminatore e l'osservatore
     ea.terminator = terminators.generation_termination
 
-    ga_config = {
-        'receptor_file'        : RECEPTOR_FILE,
-        'initial_mutation_rate': INITIAL_MUTATION_RATE,
-        'final_mutation_rate'  : FINAL_MUTATION_RATE,
-        'center_x'             : CENTER_X,
-        'center_y'             : CENTER_Y,
-        'center_z'             : CENTER_Z,
-        'size_x'               : SIZE_X,                # Se vuoi puoi parametrizzare anche questi
-        'size_y'               : SIZE_Y,
-        'size_z'               : SIZE_Z,
-        'temp_dir'             : job_temp_dir,          # Passiamo la cartella creata sopra
-        'exhaustiveness'       : EXHAUSTIVENESS,
-        'vina_exe_path'        : VINA_EXE_PATH,
-        'no_delete'            : NO_DELETE,
-        'verbose'              : VERBOSE,
-        'max_generations'      : MAX_GENERATIONS,        # <--- Fondamentale per terminators e variators
-        'job_id'               : JOB_ID,
-        'peptide_length'       : PEPTIDE_LENGTH,
-    }
+    with multiprocessing.Manager() as manager:
 
-    statistics_filepath = f"../observer/ga_observer_{JOB_ID}.csv"
-    individuals_filepath = f"../observer/ga_individuals_{JOB_ID}.csv"
+        multiprocessing_cache = manager.dict()
 
-    statistics_file = open(statistics_filepath, 'w')
-    individuals_file = open(individuals_filepath, 'w')
-    
-    # Esegui l'EA
-    try:
-        final_pop = ea.evolve(
-            generator        = peptide_generator,
-            evaluator        = parallel_evaluation_mp,
-            observer         = ea.observer,
-            mp_evaluator     = evaluate_peptide_binding,
-            mp_num_cpus      = cpus,
-            num_elites       = 1,                                       # Conserva il miglior individuo dalla generazione precedente
+        ga_config = {
+            'receptor_file'        : RECEPTOR_FILE,
+            'initial_mutation_rate': INITIAL_MUTATION_RATE,
+            'final_mutation_rate'  : FINAL_MUTATION_RATE,
+            'center_x'             : CENTER_X,
+            'center_y'             : CENTER_Y,
+            'center_z'             : CENTER_Z,
+            'size_x'               : SIZE_X,                # Se vuoi puoi parametrizzare anche questi
+            'size_y'               : SIZE_Y,
+            'size_z'               : SIZE_Z,
+            'temp_dir'             : job_temp_dir,          # Passiamo la cartella creata sopra
+            'exhaustiveness'       : EXHAUSTIVENESS,
+            'vina_exe_path'        : VINA_EXE_PATH,
+            'no_delete'            : NO_DELETE,
+            'verbose'              : VERBOSE,
+            'max_generations'      : MAX_GENERATIONS,        # <--- Fondamentale per terminators e variators
+            'job_id'               : JOB_ID,
+            'peptide_length'       : PEPTIDE_LENGTH,
+            'multiprocessing_cache': multiprocessing_cache,
+        }
+
+        statistics_filepath = f"../observer/ga_observer_{JOB_ID}.csv"
+        individuals_filepath = f"../observer/ga_individuals_{JOB_ID}.csv"
+
+        statistics_file = open(statistics_filepath, 'w')
+        individuals_file = open(individuals_filepath, 'w')
+        
+        # Esegui l'EA
+        try:
+            final_pop = ea.evolve(
+                generator        = peptide_generator,                       # Funzione di generazione delle soluzioni iniziali
+                evaluator        = parallel_evaluation_mp,                  # Funzione di valutazione delle soluzioni
+                observer         = ea.observer,                             # Funzione di osservazione ad ogni generazione
+                mp_evaluator     = evaluate_peptide_binding,                # Funzione di valutazione parallela personalizzata
+                mp_num_cpus      = cpus,                                    # Numero di CPU da utilizzare per il multiprocessing
+                num_elites       = 0,                                       # Migliori n individui dalla generazione precedente da conservare
+                
+                statistics_file  = statistics_file,                         
+                individuals_file = individuals_file,                        # Parametri passati all'observer
+                generator_params = {'peptide_length': PEPTIDE_LENGTH},      # Parametri passati in args ai variatori
+                variator_params  = {},                                      # Parametri passati a peptide_chain_variator (max_generations qui per il calcolo adattivo)
+                num_generations  = MAX_GENERATIONS,                         # Numero di generazioni
+                pop_size         = POPULATION_SIZE,                         # Dimensione della popolazione
+                num_offspring    = POPULATION_SIZE,                         # Numero di figli per generazione
+                maximize         = False,                                   # Vina: Più negativo è meglio. Quindi vogliamo minimizzare
+
+                **ga_config
+            )
+
+            print("\n" + "=" * 40)
+            print(f"           POPOLAZIONE FINALE           ")
+            print("=" * 40)
+            for i, individual in enumerate(final_pop):
+                assert isinstance(individual, Individual)
+                print(f" Individual {i}\n\t- Candidate : {individual.candidate}")
+                print(f"\t- Fitness          : {individual.fitness}")
+                print(f"\t- Binding Energy   : {individual.fitness - (get_hydrophobicity(individual.candidate) * C.HYDROPHOBICITY_WEIGHT)}")
+                print(f"\t- Birthdate        : {individual.birthdate}\n")
+                if i < len(final_pop) - 1:
+                    print("-" * 40)
+            print("=" * 40)
             
-            statistics_file  = statistics_file,
-            individuals_file = individuals_file,                        # Parametri passati all'observer
-            generator_params = {'peptide_length': PEPTIDE_LENGTH},      # Parametri passati in args ai variatori
-            variator_params  = {},                                      # Parametri passati a peptide_chain_variator (max_generations qui per il calcolo adattivo)
-            num_generations  = MAX_GENERATIONS,
-            pop_size         = POPULATION_SIZE,
-            num_offspring    = POPULATION_SIZE,
-            maximize         = False,                                   # Vina: Più negativo è meglio. Quindi vogliamo minimizzare
+            best_individual: Individual = min(final_pop) # choose best fitness (minimize energy)
+            
+            print("\n--- Risultati Finali ---")
+            print(f"Miglior sequenza trovata: {best_individual.candidate}")
+            print(f"Miglior fitness (Energia di legame Vina stimata): {best_individual.fitness:.3f} kcal/mol")
 
-            **ga_config
-        )
+            # Salva output finale
+            with open(OUTPUT, "w") as f:
+                f.write(f"ID       : {JOB_ID}\n")
+                f.write(f"Receptor : {RECEPTOR_FILE}\n")
+                f.write(f"Sequence : {best_individual.candidate}\n")
+                f.write(f"Fitness  : {best_individual.fitness}\n")
+                f.write("")
+                f.write(print_arguments(options, JOB_ID, False))
 
-        print("\n" + "=" * 40)
-        print(f"           POPOLAZIONE FINALE           ")
-        print("=" * 40)
-        for i, individual in enumerate(final_pop):
-            assert isinstance(individual, Individual)
-            print(f" Individual {i}\n\t- Candidate : {individual.candidate}")
-            print(f"\t- Fitness          : {individual.fitness}")
-            print(f"\t- Binding Energy   : {individual.fitness - (C.get_hydrophobicity(individual.candidate)*C.HYDROPHOBICITY_WEIGHT)}")
-            print(f"\t- Birthdate        : {individual.birthdate}\n")
-            if i < len(final_pop) - 1:
-                print("-" * 40)
-        print("=" * 40)
-        
-        best_individual: Individual = min(final_pop) # choose best fitness (minimize energy)
-        
-        print("\n--- Risultati Finali ---")
-        print(f"Miglior sequenza trovata: {best_individual.candidate}")
-        print(f"Miglior fitness (Energia di legame Vina stimata): {best_individual.fitness:.3f} kcal/mol")
+            unique_id     = f"{best_individual.candidate}_{JOB_ID}"         # if same sequence in same gen, overwrite
+            base_name     = os.path.join(job_temp_dir, f"p_{unique_id}", unique_id)
 
-        # Salva output finale
-        with open(OUTPUT, "w") as f:
-            f.write(f"ID       : {JOB_ID}\n")
-            f.write(f"Receptor : {RECEPTOR_FILE}\n")
-            f.write(f"Sequence : {best_individual.candidate}\n")
-            f.write(f"Fitness  : {best_individual.fitness}\n")
-            f.write("")
-            f.write(print_arguments(options, JOB_ID, False))
+            output_dir = os.path.dirname(os.path.abspath(OUTPUT))           # results folder (destination)
+            
+            shutil.copy2(f"{base_name}.pdb"  , output_dir)
+            shutil.copy2(f"{base_name}.pdbqt", output_dir)
 
-        unique_folder = f"p_{best_individual.candidate}_{JOB_ID}"
-        work_dir      = os.path.join(TEMP_DIR_BASE, unique_folder)
-        unique_id     = f"{best_individual.candidate}_{JOB_ID}"         # if same sequence in same gen, overwrite
-        base_name     = os.path.join(work_dir, unique_id)
-        pdb_file      = f"{base_name}.pdb"
-        pdbqt_file    = f"{base_name}.pdbqt"
+            statistics_file.close()
+            individuals_file.close()
 
-        output_dir = os.path.dirname(os.path.abspath(OUTPUT))           # results folder (destination)
-        
-        subprocess.run(["cp", pdb_file, output_dir]  , check = True)
-        subprocess.run(["cp", pdbqt_file, output_dir], check = True) # 🍀
+            os.makedirs("../plots", exist_ok = True)  # Ensure the directory exists
+            plot_observer_statistics(observer_file_path = statistics_filepath)
+            plot_energy_vs_hydrophobicity(individuals_file = individuals_filepath)
 
-        statistics_file.close()
-        individuals_file.close()
+        # except Exception as e:
+            # print(e)
 
-        os.makedirs("../plots", exist_ok = True)  # Ensure the directory exists
-        plot_observer_statistics(observer_file_path = statistics_filepath)
-        plot_energy_vs_hydrophobicity(individuals_file = individuals_filepath)
-
-    # except Exception as e:
-        # print(e)
-
-    finally:
-        # Rimuove l'intera cartella temporanea del job alla fine
-        if os.path.exists(job_temp_dir) and not NO_DELETE:
-            print(f"Pulizia cartella temporanea: {job_temp_dir} ...", end = "")
-            shutil.rmtree(job_temp_dir)
-            print("Done")
-    # Close the files opened for statistics and individuals
+        finally:
+            # Rimuove l'intera cartella temporanea del job alla fine
+            if os.path.exists(job_temp_dir) and not NO_DELETE:
+                print(f"Pulizia cartella temporanea: {job_temp_dir} ...", end = "")
+                shutil.rmtree(job_temp_dir)
+                print("Done")
+        # Close the files opened for statistics and individuals
 
 if __name__ == '__main__':
     run_peptide_ga()
