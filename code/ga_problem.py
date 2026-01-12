@@ -215,7 +215,7 @@ def run_vina_real(vina_exe_path: str, pdbqt_ligand: str, receptor_file: str, cen
         "--size_y"        , str(box_size[1]),
         "--size_z"        , str(box_size[2]),
         "--exhaustiveness", str(exhaustiveness),
-        "--cpu"           , "1"
+        "--cpu"           , "1",
         # "--score_only" 
     ]
     

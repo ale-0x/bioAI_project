@@ -6,7 +6,7 @@ from typing import List, Tuple, Dict, Any, TYPE_CHECKING
 
 import constants as C
 
-from utils import print_verbose
+from utils import print_verbose, print_warning
 
 # Solo per l'hinting, evitando dipendenze cicliche o problemi di runtime
 if TYPE_CHECKING:
@@ -246,6 +246,10 @@ def peptide_chain_variator(
         Lista di sequenze peptidiche (figli) variate.
     """
     print_verbose("peptide_chain_variator:", args)
+
+    # --- DEBUG START ---
+    print_verbose(f"DEBUG: Input Candidates: {len(candidates)}")
+    # --- DEBUG END ---
     # Inizializza la lista per i nuovi figli
     new_population: List[str] = []
     
@@ -279,6 +283,12 @@ def peptide_chain_variator(
         for child_seq in children_sequences:
             mutated_child: str = blosum_peptide_mutator(random, child_seq, args)
             new_population.append(mutated_child)
+        
+    # --- DEBUG START ---
+    print_verbose(f"DEBUG: Output Children: {len(new_population)}")
+    if len(new_population) < len(candidates):
+        print_warning("!!! ALLARME: Sto perdendo individui per strada! !!!")
+    # --- DEBUG END ---
             
     return new_population
 
