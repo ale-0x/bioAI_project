@@ -290,11 +290,11 @@ def evaluate_peptide_binding(candidates: List[str], args: Dict[str, Any]) -> Lis
         Lista dei valori di fitness (kcal/mol). Valori più bassi indicano legami migliori.
     """
     # Lettura parametri con fallback
-    job_id         = args.get('job_id', str(uuid.uuid4()))
-    verbose        = args.get('verbose', False)
-    vina_exe_path  = args.get('vina_exe_path', C.VINA_EXE_PATH)
-    receptor_file  = args.get('receptor_file', C.RECEPTOR_FILE)
-    generation_num = args.get('generation_num', 0)
+    job_id                = args.get('job_id', str(uuid.uuid4()))
+    verbose               = args.get('verbose', False)
+    vina_exe_path         = args.get('vina_exe_path', C.VINA_EXE_PATH)
+    receptor_file         = args.get('receptor_file', C.RECEPTOR_FILE)
+    multiprocessing_cache = args.get('multiprocessing_cache', None)
     
     cx = args.get('center_x', C.CENTER_X)
     cy = args.get('center_y', C.CENTER_Y)
@@ -321,6 +321,11 @@ def evaluate_peptide_binding(candidates: List[str], args: Dict[str, Any]) -> Lis
         # Estrai la sequenza se è un oggetto Individual
         seq = candidate.candidate if hasattr(candidate, 'candidate') else candidate
 
+        if multiprocessing_cache is not None and seq in multiprocessing_cache:
+            print_verbose(f"[evaluate_peptide_binding] Cache hit per '{seq}'. Recupero fitness da cache.", to_print = verbose)
+            fitnesses.append(multiprocessing_cache[seq])
+            continue
+
         hydrophobicity = get_hydrophobicity(seq)
         
         # Crea cartella isolata per questo singolo peptide
@@ -334,7 +339,7 @@ def evaluate_peptide_binding(candidates: List[str], args: Dict[str, Any]) -> Lis
         else:
             print_error(f"[evaluate_peptide_binding] Directory peptide '{seq}' in '{peptide_dir}' non creata!", code = -1)
 
-        unique_id     = f"{seq}_{job_id}_gen{generation_num}" # if same sequence in same gen, overwrite
+        unique_id     = f"{seq}_{job_id}" # if same sequence in same gen, overwrite
         base_name  = os.path.join(peptide_dir, unique_id)
         pdb_file   = f"{base_name}.pdb"
         pdbqt_file = f"{base_name}.pdbqt"
@@ -365,6 +370,8 @@ def evaluate_peptide_binding(candidates: List[str], args: Dict[str, Any]) -> Lis
                 
                 # usa la hydrophobicity average come penalità per restringere il campo di soluzioni possibili
                 fitnesses.append(energy + (hydrophobicity * C.HYDROPHOBICITY_WEIGHT))
+                if multiprocessing_cache is not None:
+                    multiprocessing_cache[seq] = fitnesses[-1]
                 print_verbose(f"[evaluate_peptide_binding] Conversione di '{pdb_file}' in '{pdbqt_file}' e centrato in ({cx}, {cy}, {cz}) della sequenza '{seq}' --> Done", to_print = verbose)
             else:
                 fitnesses.append(0.0)               # Penalità per fallimento prep
