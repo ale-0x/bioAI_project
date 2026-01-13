@@ -8,6 +8,7 @@ from matplotlib.colors  import LinearSegmentedColormap
 
 
 import constants as C
+from peptide_operators import get_hydrophobicity
 
 gradient_map = LinearSegmentedColormap.from_list("custom_gradient", ['#FF0000', '#FFFF00'])
 
@@ -37,7 +38,8 @@ def plot_energy_vs_hydrophobicity(individuals_file: str) -> None:
             ind = Individual(candidate=individual)
             ind.fitness = float(fitness)
             ind.birthdate = gen
-            ind.hydrophobicity = C.get_hydrophobicity(individual)
+            ind.hydrophobicity = get_hydrophobicity(individual)*C.HYDROPHOBICITY_WEIGHT
+            ind.energy = ind.fitness - ind.hydrophobicity
             generations_dict[gen].append(ind)
 
     # Get max generation for color normalization
@@ -45,7 +47,7 @@ def plot_energy_vs_hydrophobicity(individuals_file: str) -> None:
 
     # Plot individuals with color based on age
     for ind in [ind for array in generations_dict.values() for ind in array]:
-        energy = ind.fitness - ind.hydrophobicity*C.HYDROPHOBICITY_WEIGHT  # x-axis: energy
+        energy = ind.energy  # x-axis: energy
         hydrophobicity = ind.hydrophobicity  # y-axis: hydrophobicity calculation
         age = ind.birthdate
         color_value = age / max_gen if max_gen > 0 else 0
@@ -68,7 +70,7 @@ def plot_energy_vs_hydrophobicity(individuals_file: str) -> None:
     # Draw lines connecting individuals from the same generation
     for gen, individuals in sorted(generations_dict.items()):
         if len(individuals) > 1:
-            energies = [ind.fitness for ind in individuals]
+            energies = [ind.energy for ind in individuals]
             hydrophobicities = [ind.hydrophobicity for ind in individuals]
             color_value = gen / max_gen if max_gen > 0 else 0
             ax.plot(energies, hydrophobicities, linewidth=2, color=gradient_map.reversed()(color_value))

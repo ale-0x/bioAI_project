@@ -215,7 +215,8 @@ def run_vina_real(vina_exe_path: str, pdbqt_ligand: str, receptor_file: str, cen
         "--size_y"        , str(box_size[1]),
         "--size_z"        , str(box_size[2]),
         "--exhaustiveness", str(exhaustiveness),
-        "--cpu"           , "1",
+        "--cpu"           , str(cpu),
+        "--out"           , str(vina_output),
         # "--score_only" 
     ]
     
@@ -256,7 +257,11 @@ def run_vina_real(vina_exe_path: str, pdbqt_ligand: str, receptor_file: str, cen
                 # Cerca pattern tipo: "Affinity: -8.5"
                 if "Affinity:" in line:
                     parts = line.split()
-                    if len(parts) >= 2:
+                    if len(parts) >= 2: 
+                        # se il parsing è riuscito, ritorna il valore richiesto (energy) 
+                        # e inoltre salva l'output per vedere il docking
+                        open(vina_output, "w").write(result.stdout)
+                        close(vina_output)
                         return float(parts[1])
         return 0.0 # Se il parsing fallisce
     except subprocess.CalledProcessError as e:

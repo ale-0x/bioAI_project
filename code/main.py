@@ -17,7 +17,7 @@ import constants as C
 
 from ga_problem             import evaluate_peptide_binding, peptide_generator
 from utils                  import COL_LIGHT_BLUE, color_text, print_info, print_error, print_verbose
-from peptide_operators      import blosum_peptide_mutator, get_hydrophobicity, peptide_chain_variator, single_point_crossover
+from peptide_operators      import blosum_peptide_mutator, peptide_chain_variator, single_point_crossover, get_hydrophobicity
 from plots                  import plot_energy_vs_hydrophobicity, plot_observer_statistics
 
 def parse_arguments() -> argparse.Namespace:
@@ -44,7 +44,7 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument(      '--initial_mutation_rate', action = 'store'     , type = float, default = C.INITIAL_MUTATION_RATE, help = f'Probabilità che un aminoacido muti all\'inizio della simulazione. [Default: {C.INITIAL_MUTATION_RATE}]')
     parser.add_argument(      '--final_mutation_rate'  , action = 'store'     , type = float, default = C.FINAL_MUTATION_RATE  , help = f'Probabilità di mutazione alla fine del processo. [Default: {C.FINAL_MUTATION_RATE}]')
     parser.add_argument(      '--temp_dir_base'        , action = 'store'     , type = str  , default = "../resources/tmp"     , help = f'La cartella principale destinata a contenere tutti i dati temporanei generati durante l\'esecuzione. [Default: "../resources/tmp"]')
-    parser.add_argument('-o', '--output'               , action = 'store'     , type = str  , default = "result.txt"           , help = f'Il nome del file finale in cui verranno scritti i risultati migliori (sequenza e fitness) al termine dell\'evoluzione. [Default: "result.txt"]')
+    parser.add_argument('-o', '--output'               , action = 'store'     , type = str  , default = "result.txt"           , help = f'Il nome della cartella finale in cui verranno scritti i risultati migliori (sequenza e fitness) al termine dell\'evoluzione. [Default: "result_job_id"]')
 
     # Parametri Docking di Vina (Sovrascrivono constants.py)
     parser.add_argument('-x', '--center_x'             , action = 'store'     , type = float, default = C.CENTER_X             , help = f'Coordinata cartesiana X del centro esatto della Grid Box (la zona della proteina dove si cercherà il legame con il peptide). [Default: {C.CENTER_X}]')
@@ -115,7 +115,7 @@ def run_peptide_ga() -> None:
     INITIAL_MUTATION_RATE: float = options.initial_mutation_rate
     FINAL_MUTATION_RATE  : float = options.final_mutation_rate
     TEMP_DIR_BASE        : str   = options.temp_dir_base
-    OUTPUT               : str   = options.output
+    OUTPUT               : str   = f"{options.output}_{JOB_ID}"
     
     CENTER_X             : float = options.center_x
     CENTER_Y             : float = options.center_y
@@ -151,10 +151,10 @@ def run_peptide_ga() -> None:
     ea = inspyred.ec.GA(rand)
 
     #1.1 Aggiungi un Observer
-    ea.observer = inspyred.ec.observers.file_observer # add required arguments
+    ea.observer = inspyred.ec.observers.file_observer
     
     # Imposta i parametri e le funzioni
-    ea.selector = inspyred.ec.selectors.tournament_selection
+    # ea.selector = inspyred.ec.selectors.tournament_selection
     ea.replacer = inspyred.ec.replacers.plus_replacement
     
     # 2. Assegna le tue funzioni di Crossover e Mutazione
@@ -231,7 +231,8 @@ def run_peptide_ga() -> None:
                 assert isinstance(individual, Individual)
                 print(f" Individual {i}\n\t- Candidate : {individual.candidate}")
                 print(f"\t- Fitness          : {individual.fitness}")
-                print(f"\t- Binding Energy   : {individual.fitness - (get_hydrophobicity(individual.candidate) * C.HYDROPHOBICITY_WEIGHT)}")
+                print(f"\t- Binding Energy   : {individual.fitness - (get_hydrophobicity(individual.candidate)*C.HYDROPHOBICITY_WEIGHT)}")
+                print(f"\t- Hydrophobicity   : {get_hydrophobicity(individual.candidate)*C.HYDROPHOBICITY_WEIGHT}")
                 print(f"\t- Birthdate        : {individual.birthdate}\n")
                 if i < len(final_pop) - 1:
                     print("-" * 40)
@@ -244,7 +245,8 @@ def run_peptide_ga() -> None:
             print(f"Miglior fitness (Energia di legame Vina stimata): {best_individual.fitness:.3f} kcal/mol")
 
             # Salva output finale
-            with open(OUTPUT, "w") as f:
+            os.makedirs(OUTPUT, exist_ok = True)
+            with open(f"{OUTPUT}/result_{JOB_ID}.txt", "w") as f:
                 f.write(f"ID       : {JOB_ID}\n")
                 f.write(f"Receptor : {RECEPTOR_FILE}\n")
                 f.write(f"Sequence : {best_individual.candidate}\n")
@@ -252,23 +254,20 @@ def run_peptide_ga() -> None:
                 f.write("")
                 f.write(print_arguments(options, JOB_ID, False))
 
-            unique_id     = f"{best_individual.candidate}_{JOB_ID}"         # if same sequence in same gen, overwrite
-            base_name     = os.path.join(job_temp_dir, f"p_{unique_id}", unique_id)
 
-            output_dir = os.path.dirname(os.path.abspath(OUTPUT))           # results folder (destination)
-            
-            shutil.copy2(f"{base_name}.pdb"  , output_dir)
-            shutil.copy2(f"{base_name}.pdbqt", output_dir)
+        statistics_file.close()
+        individuals_file.close()
 
-            statistics_file.close()
-            individuals_file.close()
+        os.makedirs("../plots", exist_ok = True)  # Ensure the directory exists
+        plot_observer_statistics(observer_file_path = statistics_filepath)
+        plot_energy_vs_hydrophobicity(individuals_file = individuals_filepath)
 
-            os.makedirs("../plots", exist_ok = True)  # Ensure the directory exists
-            plot_observer_statistics(observer_file_path = statistics_filepath)
-            plot_energy_vs_hydrophobicity(individuals_file = individuals_filepath)
-
-        # except Exception as e:
-            # print(e)
+        unique_id     = f"{best_individual.candidate}_{JOB_ID}"         # if same sequence in same gen, overwrite
+        base_name     = os.path.join(job_temp_dir, f"p_{unique_id}", unique_id)
+        output_dir    = os.path.abspath(OUTPUT)           # results folder (destination)
+        
+        shutil.copy2(f"{base_name}.pdb"  , output_dir)
+        shutil.copy2(f"{base_name}.pdbqt", output_dir)
 
         finally:
             # Rimuove l'intera cartella temporanea del job alla fine
