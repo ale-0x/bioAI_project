@@ -105,7 +105,7 @@ def plot_observer_statistics_2(observer_file_path: str) -> None:
         print_error(f"File {observer_file_path} non trovato.", code = 0)
     else:
         job_id = os.path.basename(observer_file_path).split('_')[-1].split('.')[0]
-        plot_file = f"../plots/generation_plot_{job_id}.png"
+        plot_file = f"../plots/generation_plot2_{job_id}.png"
 
         print(f"Generazione grafico statistiche per Job '{job_id}'...")
 
@@ -237,7 +237,7 @@ def plot_energy_vs_hydrophobicity_2(individuals_file: str, hydrophobicity_weight
     ax.set_title(f'Evolution Landscape: Energy vs Hydrophobicity (Job {job_id})')
     ax.grid(True, linestyle = '--', alpha = 0.3)
 
-    scatter_plot_file = f"../plots/energy_hydrophobicity_{job_id}.png"
+    scatter_plot_file = f"../plots/energy_hydrophobicity2_{job_id}.png"
     plt.savefig(scatter_plot_file, dpi = 300, bbox_inches = 'tight')
     plt.close()
 

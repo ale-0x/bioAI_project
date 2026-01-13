@@ -20,7 +20,7 @@ import constants as C
 from ga_problem             import evaluate_peptide_binding, peptide_generator
 from utils                  import COL_LIGHT_BLUE, color_text, generation_tracker_observer, print_arguments, print_info, print_error, print_verbose, time_based_termination
 from peptide_operators      import blosum_peptide_mutator, peptide_chain_variator, single_point_crossover, get_hydrophobicity
-from plots                  import plot_energy_vs_hydrophobicity, plot_observer_statistics
+from plots                  import plot_energy_vs_hydrophobicity, plot_energy_vs_hydrophobicity_2, plot_observer_statistics, plot_observer_statistics_2
 
 def parse_arguments() -> argparse.Namespace:
     """
@@ -289,6 +289,8 @@ def run_peptide_ga() -> None:
             os.makedirs("../plots", exist_ok = True)  # Ensure the directory exists
             plot_observer_statistics(observer_file_path = statistics_filepath)
             plot_energy_vs_hydrophobicity(individuals_file = individuals_filepath, hydrophobicity_weight=HYDROPHOBICITY_WEIGHT)
+            plot_observer_statistics_2(observer_file_path = statistics_filepath)
+            plot_energy_vs_hydrophobicity_2(individuals_file = individuals_filepath, hydrophobicity_weight=HYDROPHOBICITY_WEIGHT)
 
             unique_id     = f"{best_individual.candidate}_{JOB_ID}"         # if same sequence in same gen, overwrite
             base_name     = os.path.join(job_temp_dir, f"p_{unique_id}", unique_id)
