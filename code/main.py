@@ -7,7 +7,9 @@ import os
 import random
 import shutil
 import subprocess
+import time
 
+from datetime               import datetime, timedelta
 from inspyred.ec            import Individual, terminators
 from inspyred.ec.evaluators import parallel_evaluation_mp
 from sys                    import argv
@@ -16,7 +18,7 @@ from typing                 import Any, Optional
 import constants as C
 
 from ga_problem             import evaluate_peptide_binding, peptide_generator
-from utils                  import COL_LIGHT_BLUE, color_text, print_info, print_error, print_verbose
+from utils                  import COL_LIGHT_BLUE, color_text, generation_tracker_observer, print_arguments, print_info, print_error, print_verbose, time_based_termination
 from peptide_operators      import blosum_peptide_mutator, peptide_chain_variator, single_point_crossover, get_hydrophobicity
 from plots                  import plot_energy_vs_hydrophobicity, plot_observer_statistics
 
@@ -46,6 +48,7 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument(      '--hydrophobicity_weight', action = 'store'     , type = float, default = C.HYDROPHOBICITY_WEIGHT, help = f'Peso dell\'idrofocibità. [Default: {C.HYDROPHOBICITY_WEIGHT}]')
     parser.add_argument(      '--temp_dir_base'        , action = 'store'     , type = str  , default = "../resources/tmp"     , help = f'La cartella principale destinata a contenere tutti i dati temporanei generati durante l\'esecuzione. [Default: "../resources/tmp"]')
     parser.add_argument('-o', '--output'               , action = 'store'     , type = str  , default = "result.txt"           , help = f'Il nome della cartella finale in cui verranno scritti i risultati migliori (sequenza e fitness) al termine dell\'evoluzione. [Default: "result_job_id"]')
+    parser.add_argument('-d', '--deadline'             , action = 'store'     , type = str  , default = "23:55:00"             , help = f'Il tempo limite massimo per l\'esecuzione del job (formato HH:MM:SS). Lo script cercherà di terminare l\'esecuzione prima di questo tempo di esecuzione. [Default: "23:55:00"]')
 
     # Parametri Docking di Vina (Sovrascrivono constants.py)
     parser.add_argument('-x', '--center_x'             , action = 'store'     , type = float, default = C.CENTER_X             , help = f'Coordinata cartesiana X del centro esatto della Grid Box (la zona della proteina dove si cercherà il legame con il peptide). [Default: {C.CENTER_X}]')
@@ -63,22 +66,6 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument(      '--version'              , action = 'version'   , version = '%(prog)s - Version {} created by {}'.format(C.__version__, C.__author__), help = "Output version information and exit.")
     
     return parser.parse_args()
-
-def print_arguments(arguments: argparse.Namespace, name = "", to_print: bool = True) -> str | None:
-    output = list()
-    output.append("\n" + "="*40)
-    output.append(f" CONFIGURAZIONE JOB: {name}")
-    output.append("="*40)
-        
-    for key, value in vars(arguments).items():
-        output.append(f"{key.ljust(22)}: {value}")
-    output.append("="*40 + "\n")
-
-    if to_print:
-        print("\n".join(output))
-    else:
-        return "\n".join(output)
-
 
 def run_peptide_ga() -> None:
     """
@@ -103,38 +90,55 @@ def run_peptide_ga() -> None:
     >>> print(f"Best sequence: {best_peptide.candidate}")
     Best sequence: LWRTAVI # Esempio di miglior sequenza
     """
+    START_TIME = time.time()
 
     options = parse_arguments()
-    RECEPTOR_NAME        : str   = options.receptor_name
-    RECEPTOR_FILE        : str   = options.receptor_file
-    
-    JOB_ID               : str   = options.job_id
-    CPUS                 : int   = options.cpus
-    PEPTIDE_LENGTH       : int   = options.peptide_length
-    POPULATION_SIZE      : int   = options.population_size
-    MAX_GENERATIONS      : int   = options.generations
-    INITIAL_MUTATION_RATE: float = options.initial_mutation_rate
-    FINAL_MUTATION_RATE  : float = options.final_mutation_rate
-    HYDROPHOBICITY_WEIGHT: float = options.hydrophobicity_weight
-    TEMP_DIR_BASE        : str   = options.temp_dir_base
-    OUTPUT               : str   = f"{options.output}_{JOB_ID}"
-    
-    CENTER_X             : float = options.center_x
-    CENTER_Y             : float = options.center_y
-    CENTER_Z             : float = options.center_z
-    SIZE_X               : int   = options.size_x
-    SIZE_Y               : int   = options.size_y
-    SIZE_Z               : int   = options.size_z
-    EXHAUSTIVENESS       : int   = options.exhaustiveness
-    VINA_EXE_PATH        : str   = options.vina_exe_path
 
-    NO_DELETE            : bool  = options.no_delete
-    VERBOSE              : bool  = options.verbose
+    RECEPTOR_NAME        : str       = options.receptor_name
+    RECEPTOR_FILE        : str       = options.receptor_file
+        
+    JOB_ID               : str       = options.job_id
+    CPUS                 : int       = options.cpus
+    PEPTIDE_LENGTH       : int       = options.peptide_length
+    POPULATION_SIZE      : int       = options.population_size
+    MAX_GENERATIONS      : int       = options.generations
+    INITIAL_MUTATION_RATE: float     = options.initial_mutation_rate
+    FINAL_MUTATION_RATE  : float     = options.final_mutation_rate
+    HYDROPHOBICITY_WEIGHT: float     = options.hydrophobicity_weight
+    TEMP_DIR_BASE        : str       = options.temp_dir_base
+    OUTPUT               : str       = f"{options.output}_{JOB_ID}"
+
+    try:
+        h, m, s = map(int, options.deadline.split(':')) # formato HH:MM:SS
+        DEADLINE : timedelta = timedelta(hours = h, minutes = m, seconds = s)
+        
+        # Calcoliamo il timestamp finale assoluto
+        END_TIME : float = START_TIME + DEADLINE.total_seconds()
+        
+        # Sottraiamo 5 minuti (300 secondi) di buffer per sicurezza su SLURM
+        BUFFER_SECONDS = 0 
+        GLOBAL_VINA_DEADLINE = END_TIME - BUFFER_SECONDS
+        
+    except ValueError:
+        print_error("Errore nel formato deadline. Usa HH:MM:SS (es. 23:55:00)", code = -1)
+        return
+
+    CENTER_X             : float     = options.center_x
+    CENTER_Y             : float     = options.center_y
+    CENTER_Z             : float     = options.center_z
+    SIZE_X               : int       = options.size_x
+    SIZE_Y               : int       = options.size_y
+    SIZE_Z               : int       = options.size_z
+    EXHAUSTIVENESS       : int       = options.exhaustiveness
+    VINA_EXE_PATH        : str       = options.vina_exe_path
+
+    NO_DELETE            : bool      = options.no_delete
+    VERBOSE              : bool      = options.verbose
 
     print_arguments(options, JOB_ID)
 
     rand = random.Random()
-    rand.seed(C.SEED)                # Seed per la riproducibilità
+    # rand.seed(C.SEED)                # Seed per la riproducibilità
 
     job_temp_dir = os.path.join(TEMP_DIR_BASE, f"bioai_ga_{JOB_ID}")
     if not os.path.exists(job_temp_dir):
@@ -146,14 +150,20 @@ def run_peptide_ga() -> None:
             print_error(f"[run_peptide_ga] Directory temporanea '{job_temp_dir}' non creata!", code = -1)
     
 
-    print(f"--- Avvio Algoritmo Genetico (Peptide Length: {PEPTIDE_LENGTH}) ---")
-    print(f"Popolazione: {POPULATION_SIZE}, Generazioni: {MAX_GENERATIONS}")
+    print(f"--- Start Genetic Algorithm (Peptide Length: {PEPTIDE_LENGTH}) ---")
+    print(f"Start Time             : {datetime.fromtimestamp(START_TIME).strftime("%d/%m/%Y - %H:%M:%S")}")
+    print(f"Max Evolution Duration : {datetime.fromtimestamp(END_TIME).strftime("%d/%m/%Y - %H:%M:%S")}")
+    print(f"Population Dimension   : {POPULATION_SIZE}")
+    print(f"Max Generations        : {MAX_GENERATIONS}")
 
     # 1. Setup dell'Algoritmo Evolutivo (EA)
     ea = inspyred.ec.GA(rand)
 
     #1.1 Aggiungi un Observer
-    ea.observer = inspyred.ec.observers.file_observer
+    ea.observer = [
+        inspyred.ec.observers.file_observer,
+        generation_tracker_observer,
+    ]
     
     # Imposta i parametri e le funzioni
     ea.selector = inspyred.ec.selectors.tournament_selection
@@ -171,11 +181,16 @@ def run_peptide_ga() -> None:
     ea.evaluator = parallel_evaluation_mp
     
     # 4. Imposta il terminatore e l'osservatore
-    ea.terminator = terminators.generation_termination
+    ea.terminator = [
+        terminators.generation_termination,
+        time_based_termination,
+    ]
 
     with multiprocessing.Manager() as manager:
 
         multiprocessing_cache = manager.dict()
+        generation_num        = manager.Value('i', -1)  # Contatore di generazione condiviso
+        print_lock            = manager.Lock()
 
         ga_config = {
             'receptor_file'        : RECEPTOR_FILE,
@@ -197,6 +212,10 @@ def run_peptide_ga() -> None:
             'job_id'               : JOB_ID,
             'peptide_length'       : PEPTIDE_LENGTH,
             'multiprocessing_cache': multiprocessing_cache,
+            'global_deadline'      : GLOBAL_VINA_DEADLINE,
+            'tournament_size'      : 2,
+            'generation_num'       : generation_num,
+            'print_lock'           : print_lock,
         }
 
         statistics_filepath = f"../observer/ga_observer_{JOB_ID}.csv"
@@ -232,28 +251,34 @@ def run_peptide_ga() -> None:
             print("=" * 40)
             for i, individual in enumerate(final_pop):
                 assert isinstance(individual, Individual)
-                print(f" Individual {i}\n\t- Candidate : {individual.candidate}")
+                print(f" Individual {i}\n\t- Candidate        : {individual.candidate}")
                 print(f"\t- Fitness          : {individual.fitness}")
                 print(f"\t- Binding Energy   : {individual.fitness - (get_hydrophobicity(individual.candidate) * HYDROPHOBICITY_WEIGHT)}")
                 print(f"\t- Hydrophobicity   : {get_hydrophobicity(individual.candidate) * HYDROPHOBICITY_WEIGHT}")
-                print(f"\t- Birthdate        : {individual.birthdate}\n")
+                print(f"\t- Birthdate        : {datetime.fromtimestamp(individual.birthdate).strftime("%d/%m/%Y - %H:%M:%S")}\n")
                 if i < len(final_pop) - 1:
                     print("-" * 40)
             print("=" * 40)
             
-            best_individual: Individual = min(final_pop) # choose best fitness (minimize energy)
+            best_individual: Individual = min(final_pop, key = lambda x: x.fitness - (get_hydrophobicity(x.candidate) * HYDROPHOBICITY_WEIGHT)) # choose best fitness (minimize energy)
             
-            print("\n--- Risultati Finali ---")
-            print(f"Miglior sequenza trovata: {best_individual.candidate}")
-            print(f"Miglior fitness (Energia di legame Vina stimata): {best_individual.fitness:.3f} kcal/mol")
+            print("\n --- Risultati Finali ---")
+            print(f"Sequence       : {best_individual.candidate}")
+            print(f"Fitness        : {best_individual.fitness}")
+            print(f"Binding Energy : {best_individual.fitness - (get_hydrophobicity(best_individual.candidate) * HYDROPHOBICITY_WEIGHT)}")
+            print(f"Hydrophobicity : {get_hydrophobicity(best_individual.candidate) * HYDROPHOBICITY_WEIGHT}")
+            print(f"Birthdate      : {datetime.fromtimestamp(best_individual.birthdate).strftime("%d/%m/%Y - %H:%M:%S")}")
 
             # Salva output finale
             os.makedirs(OUTPUT, exist_ok = True)
             with open(f"{OUTPUT}/result_{JOB_ID}.txt", "w") as f:
-                f.write(f"ID       : {JOB_ID}\n")
-                f.write(f"Receptor : {RECEPTOR_FILE}\n")
-                f.write(f"Sequence : {best_individual.candidate}\n")
-                f.write(f"Fitness  : {best_individual.fitness}\n")
+                f.write(f"ID             : {JOB_ID}\n")
+                f.write(f"Receptor       : {RECEPTOR_FILE}\n")
+                f.write(f"Sequence       : {best_individual.candidate}\n")
+                f.write(f"Fitness        : {best_individual.fitness}\n")
+                f.write(f"Binding Energy : {best_individual.fitness - (get_hydrophobicity(best_individual.candidate) * HYDROPHOBICITY_WEIGHT)}\n")
+                f.write(f"Hydrophobicity : {get_hydrophobicity(best_individual.candidate) * HYDROPHOBICITY_WEIGHT}\n")
+                f.write(f"Birthdate      : {datetime.fromtimestamp(best_individual.birthdate).strftime("%d/%m/%Y - %H:%M:%S")}\n")
                 f.write("")
                 f.write(print_arguments(options, JOB_ID, False))
 
