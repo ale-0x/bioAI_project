@@ -100,9 +100,6 @@ def plot_energy_vs_hydrophobicity(individuals_file: str) -> None:
     plt.close()
     print(f"Energy vs Hydrophobicity plot saved to {scatter_plot_file}")
 
-
-
-
 def plot_observer_statistics_2(observer_file_path: str) -> None:
     if not os.path.exists(observer_file_path):
         print_error(f"File {observer_file_path} non trovato.", code = 0)
@@ -219,7 +216,7 @@ def plot_energy_vs_hydrophobicity_2(individuals_file: str) -> None:
         zorder    = 11
     )
 
-    global_best = min(all_individuals, key = lambda x: x.energy_val)
+    global_best = min(all_individuals, key = lambda x: x.fitness)
     ax.text(
         global_best.energy_val, 
         global_best.hydrophobicity, 
@@ -239,8 +236,6 @@ def plot_energy_vs_hydrophobicity_2(individuals_file: str) -> None:
     ax.set_ylabel('Hydrophobicity Index (pH 7)')
     ax.set_title(f'Evolution Landscape: Energy vs Hydrophobicity (Job {job_id})')
     ax.grid(True, linestyle = '--', alpha = 0.3)
-
-    ax.invert_xaxis()                                               # Inversione Asse X (Decrescente)
 
     scatter_plot_file = f"../plots/energy_hydrophobicity_{job_id}.png"
     plt.savefig(scatter_plot_file, dpi = 300, bbox_inches = 'tight')
