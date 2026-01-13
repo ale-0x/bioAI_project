@@ -255,19 +255,19 @@ def run_peptide_ga() -> None:
                 f.write(print_arguments(options, JOB_ID, False))
 
 
-        statistics_file.close()
-        individuals_file.close()
+            statistics_file.close()
+            individuals_file.close()
 
-        os.makedirs("../plots", exist_ok = True)  # Ensure the directory exists
-        plot_observer_statistics(observer_file_path = statistics_filepath)
-        plot_energy_vs_hydrophobicity(individuals_file = individuals_filepath)
+            os.makedirs("../plots", exist_ok = True)  # Ensure the directory exists
+            plot_observer_statistics(observer_file_path = statistics_filepath)
+            plot_energy_vs_hydrophobicity(individuals_file = individuals_filepath)
 
-        unique_id     = f"{best_individual.candidate}_{JOB_ID}"         # if same sequence in same gen, overwrite
-        base_name     = os.path.join(job_temp_dir, f"p_{unique_id}", unique_id)
-        output_dir    = os.path.abspath(OUTPUT)           # results folder (destination)
-        
-        shutil.copy2(f"{base_name}.pdb"  , output_dir)
-        shutil.copy2(f"{base_name}.pdbqt", output_dir)
+            unique_id     = f"{best_individual.candidate}_{JOB_ID}"         # if same sequence in same gen, overwrite
+            base_name     = os.path.join(job_temp_dir, f"p_{unique_id}", unique_id)
+            output_dir    = os.path.abspath(OUTPUT)           # results folder (destination)
+            
+            shutil.copy2(f"{base_name}.pdb"  , output_dir)
+            shutil.copy2(f"{base_name}.pdbqt", output_dir)
 
         finally:
             # Rimuove l'intera cartella temporanea del job alla fine
