@@ -199,9 +199,9 @@ At the end of the run, the `plots/` folder will contain:
 
 ## 👥 Authors
 
-| Name | Tag | Role |
-| --- | --- | --- |
-| [Alex Callegaro](https://github.com/ale-0x) | @ale-0x | Master's student in Quantitative and Computational Biology, University of Trento |
-| [Clemente Calabrese](https://github.com/cl3mente) | @cl3mente | Master's student in Quantitative and Computational Biology, University of Trento |
-| [Federico Cavasin](https://github.com/Clausola) | @Clausola | Master's student in Quantitative and Computational Biology, University of Trento |
-| [Giada Silvaggi](https://github.com/giadasil) | @giadasil | Master's student in Quantitative and Computational Biology, University of Trento |
+| Name | Role |
+| --- | --- |
+| [Alex Callegaro](https://github.com/ale-0x) | Master's student in Quantitative and Computational Biology, University of Trento |
+| [Clemente Calabrese](https://github.com/cl3mente) | Master's student in Quantitative and Computational Biology, University of Trento |
+| [Federico Cavasin](https://github.com/Clausola) | Master's student in Quantitative and Computational Biology, University of Trento |
+| [Giada Silvaggi](https://github.com/giadasil) | Master's student in Quantitative and Computational Biology, University of Trento |
