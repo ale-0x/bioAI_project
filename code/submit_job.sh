@@ -34,6 +34,7 @@ python3 -u main.py                                               \
     --generations           3                                   \
     --initial_mutation_rate 0.30                                \
     --final_mutation_rate   0.05                                \
+    --hydrophobicity_weight 0.10                                \
     --temp_dir_base         $TMP_BASE                           \
     --output                ../results/result_$SLURM_JOB_ID.txt \
     --center_x=8.084                                            \

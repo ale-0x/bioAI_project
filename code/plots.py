@@ -28,7 +28,7 @@ def plot_observer_statistics(observer_file_path: str) -> None:
     plt.savefig(plot_file)
     plt.close()
 
-def plot_energy_vs_hydrophobicity(individuals_file: str) -> None:
+def plot_energy_vs_hydrophobicity(individuals_file: str, hydrophobicity_weight: float = C.HYDROPHOBICITY_WEIGHT) -> None:
     """
     scatterplot: energia vs idrofobicità media di ciascun individuo attraverso le generazioni.
     puoi chiamarlo con un individuals_file.csv
@@ -46,7 +46,7 @@ def plot_energy_vs_hydrophobicity(individuals_file: str) -> None:
             ind = Individual(candidate=individual)
             ind.fitness = float(fitness)
             ind.birthdate = gen
-            ind.hydrophobicity = get_hydrophobicity(individual)*C.HYDROPHOBICITY_WEIGHT
+            ind.hydrophobicity = get_hydrophobicity(individual)*hydrophobicity_weight
             ind.energy = ind.fitness - ind.hydrophobicity
             generations_dict[gen].append(ind)
 
@@ -123,7 +123,7 @@ def plot_observer_statistics_2(observer_file_path: str) -> None:
         
         print(f"Grafico salvato in: {plot_file}")
 
-def plot_energy_vs_hydrophobicity_2(individuals_file: str) -> None:
+def plot_energy_vs_hydrophobicity_2(individuals_file: str, hydrophobicity_weight: float = C.HYDROPHOBICITY_WEIGHT) -> None:
     """
     scatterplot: energia vs idrofobicità media di ciascun individuo attraverso le generazioni.
     puoi chiamarlo con un individuals_file.csv
@@ -155,7 +155,7 @@ def plot_energy_vs_hydrophobicity_2(individuals_file: str) -> None:
             ind.fitness        = fitness
             ind.birthdate      = gen
             ind.hydrophobicity = get_hydrophobicity(sequence)
-            ind.energy_val     = fitness - (ind.hydrophobicity * C.HYDROPHOBICITY_WEIGHT)
+            ind.energy_val     = fitness - (ind.hydrophobicity * hydrophobicity_weight)
 
             generations_dict[gen].append(ind)
     

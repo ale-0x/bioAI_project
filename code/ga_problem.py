@@ -260,8 +260,8 @@ def run_vina_real(vina_exe_path: str, pdbqt_ligand: str, receptor_file: str, cen
                     if len(parts) >= 2: 
                         # se il parsing è riuscito, ritorna il valore richiesto (energy) 
                         # e inoltre salva l'output per vedere il docking
-                        open(vina_output, "w").write(result.stdout)
-                        close(vina_output)
+                        # open(vina_output, "w").write(result.stdout)
+                        # close(vina_output)
                         return float(parts[1])
         return 0.0 # Se il parsing fallisce
     except subprocess.CalledProcessError as e:
@@ -298,6 +298,7 @@ def evaluate_peptide_binding(candidates: List[str], args: Dict[str, Any]) -> Lis
     job_id                = args.get('job_id', str(uuid.uuid4()))
     verbose               = args.get('verbose', False)
     vina_exe_path         = args.get('vina_exe_path', C.VINA_EXE_PATH)
+    hydrophobicity_weight = args.get('hydrophobicity_weight', C.HYDROPHOBICITY_WEIGHT)
     receptor_file         = args.get('receptor_file', C.RECEPTOR_FILE)
     multiprocessing_cache = args.get('multiprocessing_cache', None)
     
@@ -374,7 +375,7 @@ def evaluate_peptide_binding(candidates: List[str], args: Dict[str, Any]) -> Lis
                 print_verbose(f"[evaluate_peptide_binding] Valutazione di Autodock Vina su '{pdbqt_file}' della sequenza '{seq}' --> Done", to_print = verbose)
                 
                 # usa la hydrophobicity average come penalità per restringere il campo di soluzioni possibili
-                fitnesses.append(energy + (hydrophobicity * C.HYDROPHOBICITY_WEIGHT))
+                fitnesses.append(energy + (hydrophobicity * hydrophobicity_weight))
                 if multiprocessing_cache is not None:
                     multiprocessing_cache[seq] = fitnesses[-1]
                 print_verbose(f"[evaluate_peptide_binding] Conversione di '{pdb_file}' in '{pdbqt_file}' e centrato in ({cx}, {cy}, {cz}) della sequenza '{seq}' --> Done", to_print = verbose)

@@ -43,6 +43,7 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument('-g', '--generations'          , action = 'store'     , type = int  , default = C.MAX_GENERATIONS      , help = f'Numero massimo di generazioni. [Default: {C.MAX_GENERATIONS}]')
     parser.add_argument(      '--initial_mutation_rate', action = 'store'     , type = float, default = C.INITIAL_MUTATION_RATE, help = f'Probabilità che un aminoacido muti all\'inizio della simulazione. [Default: {C.INITIAL_MUTATION_RATE}]')
     parser.add_argument(      '--final_mutation_rate'  , action = 'store'     , type = float, default = C.FINAL_MUTATION_RATE  , help = f'Probabilità di mutazione alla fine del processo. [Default: {C.FINAL_MUTATION_RATE}]')
+    parser.add_argument(      '--hydrophobicity_weight', action = 'store'     , type = float, default = C.HYDROPHOBICITY_WEIGHT, help = f'Peso dell\'idrofocibità. [Default: {C.HYDROPHOBICITY_WEIGHT}]')
     parser.add_argument(      '--temp_dir_base'        , action = 'store'     , type = str  , default = "../resources/tmp"     , help = f'La cartella principale destinata a contenere tutti i dati temporanei generati durante l\'esecuzione. [Default: "../resources/tmp"]')
     parser.add_argument('-o', '--output'               , action = 'store'     , type = str  , default = "result.txt"           , help = f'Il nome della cartella finale in cui verranno scritti i risultati migliori (sequenza e fitness) al termine dell\'evoluzione. [Default: "result_job_id"]')
 
@@ -114,6 +115,7 @@ def run_peptide_ga() -> None:
     MAX_GENERATIONS      : int   = options.generations
     INITIAL_MUTATION_RATE: float = options.initial_mutation_rate
     FINAL_MUTATION_RATE  : float = options.final_mutation_rate
+    HYDROPHOBICITY_WEIGHT: float = options.hydrophobicity_weight
     TEMP_DIR_BASE        : str   = options.temp_dir_base
     OUTPUT               : str   = f"{options.output}_{JOB_ID}"
     
@@ -179,6 +181,7 @@ def run_peptide_ga() -> None:
             'receptor_file'        : RECEPTOR_FILE,
             'initial_mutation_rate': INITIAL_MUTATION_RATE,
             'final_mutation_rate'  : FINAL_MUTATION_RATE,
+            'hydrophobicity_weight': HYDROPHOBICITY_WEIGHT,
             'center_x'             : CENTER_X,
             'center_y'             : CENTER_Y,
             'center_z'             : CENTER_Z,
@@ -231,8 +234,8 @@ def run_peptide_ga() -> None:
                 assert isinstance(individual, Individual)
                 print(f" Individual {i}\n\t- Candidate : {individual.candidate}")
                 print(f"\t- Fitness          : {individual.fitness}")
-                print(f"\t- Binding Energy   : {individual.fitness - (get_hydrophobicity(individual.candidate)*C.HYDROPHOBICITY_WEIGHT)}")
-                print(f"\t- Hydrophobicity   : {get_hydrophobicity(individual.candidate)*C.HYDROPHOBICITY_WEIGHT}")
+                print(f"\t- Binding Energy   : {individual.fitness - (get_hydrophobicity(individual.candidate) * HYDROPHOBICITY_WEIGHT)}")
+                print(f"\t- Hydrophobicity   : {get_hydrophobicity(individual.candidate) * HYDROPHOBICITY_WEIGHT}")
                 print(f"\t- Birthdate        : {individual.birthdate}\n")
                 if i < len(final_pop) - 1:
                     print("-" * 40)
