@@ -1,10 +1,13 @@
 ######################### IMPORTS #########################
 
 import os
+import time
 
 # from _typeshed import SupportsWrite
+from argparse import Namespace
 from pathlib import Path, PurePath
 from sys import stderr, exit
+from threading import Lock
 from typing import Any, Union
 from typing_extensions import Literal
 
@@ -61,7 +64,7 @@ class AutoResolvePath:
 def color_text(color_code: str, *text: str, sep: str | None = " ", end: str | None = "",) -> str:
     return f"{color_code}{sep.join(text)}{COL_RESET}{end}"
 
-def print_info(*values: object, to_print: bool = True, sep: str | None = " ", end: str | None = "\n", file = None, flush: Literal[False] = False, prefix: str = INFO) -> None:
+def print_info(*values: object, to_print: bool = True, sep: str | None = " ", end: str | None = "\n", file = None, flush: Literal[False] = False, prefix: str = INFO, lock: Lock = None) -> None:
     """
     Print info in `*values` to the stream `text` file, separed by `sep` and followed by `end`.
 
@@ -85,25 +88,46 @@ def print_info(*values: object, to_print: bool = True, sep: str | None = " ", en
     flush : `Literal[False]`, default `False`, optional
         If `True`, flush the buffer immediately.
     """
-    if to_print:
-        if prefix == "":
-            print(
-                *(COL_LIGHT_BLUE, *values, COL_RESET),
-                sep = sep,
-                end = end,
-                file = file,
-                flush = flush
-            ) 
-        else:
-            print(
-                *(COL_LIGHT_BLUE, prefix, *values, COL_RESET),
-                sep = sep,
-                end = end,
-                file = file,
-                flush = flush
-            )
+    if lock:
+        with lock:
+            if to_print:
+                if prefix == "":
+                    print(
+                        *(COL_LIGHT_BLUE, *values, COL_RESET),
+                        sep = sep,
+                        end = end,
+                        file = file,
+                        flush = flush
+                    ) 
+                else:
+                    print(
+                        *(COL_LIGHT_BLUE, prefix, *values, COL_RESET),
+                        sep = sep,
+                        end = end,
+                        file = file,
+                        flush = flush
+                    )
+    else:
+        if to_print:
+            if prefix == "":
+                print(
+                    *(COL_LIGHT_BLUE, *values, COL_RESET),
+                    sep = sep,
+                    end = end,
+                    file = file,
+                    flush = flush
+                ) 
+            else:
+                print(
+                    *(COL_LIGHT_BLUE, prefix, *values, COL_RESET),
+                    sep = sep,
+                    end = end,
+                    file = file,
+                    flush = flush
+                )
+    
 
-def print_error(*values: object, code: int = 0, to_print: bool = True, sep: str | None = " ", end: str | None = "\n", file = stderr, flush: Literal[False] = False) -> None:
+def print_error(*values: object, code: int = 0, to_print: bool = True, sep: str | None = " ", end: str | None = "\n", file = stderr, flush: Literal[False] = False, lock: Lock = None) -> None:
     """
     Print error in `*values` to the stream `text` file, separed by `sep` and followed by `end`. If `code` different of 0, exit with `code`.
 
@@ -130,19 +154,33 @@ def print_error(*values: object, code: int = 0, to_print: bool = True, sep: str 
     flush : `Literal[False]`, default `False`, optional
         If `True`, flush the buffer immediately.
     """
-    if to_print:
-        print(
-            *(COL_RED, ERROR, *values, COL_RESET),
-            sep = sep,
-            end = end,
-            file = file,
-            flush = flush
-        )
+    if lock:
+        with lock:
+            if to_print:
+                print(
+                    *(COL_RED, ERROR, *values, COL_RESET),
+                    sep = sep,
+                    end = end,
+                    file = file,
+                    flush = flush
+                )
 
-    if code != 0:
-        exit(code)
+            if code != 0:
+                exit(code)
+    else:
+        if to_print:
+            print(
+                *(COL_RED, ERROR, *values, COL_RESET),
+                sep = sep,
+                end = end,
+                file = file,
+                flush = flush
+            )
 
-def print_verbose(*values: object, to_print: bool = True, sep: str | None = " ", end: str | None = "\n", file = None, flush: Literal[False] = False) -> None:
+        if code != 0:
+            exit(code)
+
+def print_verbose(*values: object, to_print: bool = True, sep: str | None = " ", end: str | None = "\n", file = None, flush: Literal[False] = False, lock: Lock = None) -> None:
     """
     Print verbose in `*values` to the stream `text` file, separed by `sep` and followed by `end`.
 
@@ -166,16 +204,29 @@ def print_verbose(*values: object, to_print: bool = True, sep: str | None = " ",
     flush : `Literal[False]`, default `False`, optional
         If `True`, flush the buffer immediately.
     """
-    if to_print:
-        print(
-            *(VERB, *values),
-            sep = sep,
-            end = end,
-            file = file,
-            flush = flush
-        )
+    if lock:
+        with lock:
+            if to_print:
+                print(
+                    # *(COL_YELLOW, VERB, *values, COL_RESET),
+                    *(VERB, *values),
+                    sep = sep,
+                    end = end,
+                    file = file,
+                    flush = flush
+                )
+    else:
+        if to_print:
+            print(
+                # *(COL_YELLOW, VERB, *values, COL_RESET),
+                *(VERB, *values),
+                sep = sep,
+                end = end,
+                file = file,
+                flush = flush
+            )
 
-def print_warning(*values: object, to_print: bool = True, sep: str | None = " ", end: str | None = "\n", file = None, flush: Literal[False] = False) -> None:
+def print_warning(*values: object, to_print: bool = True, sep: str | None = " ", end: str | None = "\n", file = None, flush: Literal[False] = False, lock: Lock = None) -> None:
     """
     Print warning in `*values` to the stream `text` file, separed by `sep` and followed by `end`.
 
@@ -199,11 +250,67 @@ def print_warning(*values: object, to_print: bool = True, sep: str | None = " ",
     flush : `Literal[False]`, default `False`, optional
         If `True`, flush the buffer immediately.
     """
+    if lock:
+        with lock:
+            if to_print:
+                print(
+                    *(COL_PURPLE, WARNING, *values, COL_RESET),
+                    sep = sep,
+                    end = end,
+                    file = file,
+                    flush = flush
+                )
+    else:
+        if to_print:
+            print(
+                *(COL_PURPLE, WARNING, *values, COL_RESET),
+                sep = sep,
+                end = end,
+                file = file,
+                flush = flush
+            )
+
+def time_based_termination(population, num_generations, num_evaluations, args):
+    """
+    Ferma le generazioni se abbiamo superato la deadline globale (meno il buffer).
+    """
+    global_deadline = args.get('global_deadline', float('inf'))
+    generation_num  = args.get('generation_num', None)
+    print_lock      = args.get('print_lock', None)
+    
+    # Se il tempo attuale ha superato la deadline fissata per Vina,
+    # significa che l'ultima generazione è stata 'tagliata' o siamo al limite.
+    # Fermiamo l'evoluzione per salvare i dati.
+    if time.time() >= global_deadline:
+        print_warning(f"[TIME LIMIT] Raggiunta la deadline globale. Arresto evoluzione{f" alla generazione {generation_num.value} " if generation_num is not None else " "}per salvataggio.", lock = print_lock)
+        return True
+    return False
+
+def generation_tracker_observer(population, num_generations, num_evaluations, args):
+    """
+    Aggiorna il contatore di generazione condiviso tra i processi.
+    """
+    generation_num  = args.get('generation_num', None)
+    print_lock      = args.get('print_lock', None)
+    
+    if generation_num is not None:
+        # num_generations è fornito automaticamente da inspyred (0, 1, 2...)
+        generation_num.value = num_generations
+        if print_lock:
+            with print_lock:
+                print(f"Valutata generazione {"iniziale" if generation_num.value == 0 else generation_num.value}.")
+
+def print_arguments(arguments: Namespace, name = "", to_print: bool = True) -> str | None:
+    output = list()
+    output.append("\n" + "="*40)
+    output.append(f"      CONFIGURAZIONE JOB: {name}")
+    output.append("="*40)
+        
+    for key, value in vars(arguments).items():
+        output.append(f"{key.ljust(22)}: {value}")
+    output.append("="*40 + "\n")
+
     if to_print:
-        print(
-            *(COL_PURPLE, WARNING, *values, COL_RESET),
-            sep = sep,
-            end = end,
-            file = file,
-            flush = flush
-        )
+        print("\n".join(output))
+    else:
+        return "\n".join(output)

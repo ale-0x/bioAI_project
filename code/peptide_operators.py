@@ -143,7 +143,7 @@ def get_adaptive_mutation_rate(args: Dict[str, Any]) -> float:
     # Se il GA è a 50 su 100 generazioni (a metà)
     # Rate = 0.30 - (0.30 - 0.05) * 0.5 = 0.175
     """
-    print_verbose("get_adaptive_mutation_rate:", args)
+    # print_verbose("get_adaptive_mutation_rate:", args)
     # inspyred passa l'oggetto EvolutionaryComputation in args['_ec']
     ec = args.get('_ec', None)
     
@@ -200,7 +200,7 @@ def blosum_peptide_mutator(
     >>> print(mutated_seq) 
     'IVTA' # Esempio di mutazione da L a I, favorita da BLOSUM.
     """
-    print_verbose("blosum_peptide_mutator:", args)
+    # print_verbose("blosum_peptide_mutator:", args)
     mutation_probability: float     = get_adaptive_mutation_rate(args)
     mutated_sequence    : List[str] = list(candidate)
     
@@ -245,7 +245,7 @@ def peptide_chain_variator(
     `List[str]`
         Lista di sequenze peptidiche (figli) variate.
     """
-    print_verbose("peptide_chain_variator:", args)
+    # print_verbose("peptide_chain_variator:", args)
 
     # --- DEBUG START ---
     print_verbose(f"DEBUG: Input Candidates: {len(candidates)}")

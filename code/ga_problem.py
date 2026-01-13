@@ -5,18 +5,21 @@ import random
 import re
 import shutil
 import subprocess
+import time
 import uuid
 
 from openbabel  import openbabel, pybel
+from pathlib    import Path
 from rdkit      import Chem
 from rdkit.Chem import AllChem
+from subprocess import TimeoutExpired
 from typing     import Any, Dict, List, Tuple
 
 
 import constants as C
 
 from peptide_operators import get_hydrophobicity
-from utils      import print_error, print_verbose
+from utils      import print_error, print_verbose, print_warning
 
 # --- Funzione di Generazione della Popolazione Iniziale ---
 
@@ -148,7 +151,7 @@ def prepare_ligand_openbabel(pdb_path: str, pdbqt_output_path: str, center: Tupl
         return False
     
 
-def run_vina_real(vina_exe_path: str, pdbqt_ligand: str, receptor_file: str, center: Tuple[float, float, float], box_size: Tuple[int, int, int], vina_output: str, cpu: int = 1, exhaustiveness: int = C.EXHAUSTIVENESS, verbose: bool = False) -> float:
+def run_vina_real(vina_exe_path: str, pdbqt_ligand: str, receptor_file: str, center: Tuple[float, float, float], box_size: Tuple[int, int, int], vina_output: str, cpu: int = 1, exhaustiveness: int = C.EXHAUSTIVENESS, time_left: float = float("inf"), verbose: bool = False) -> float:
     """
     Esegue il docking molecolare lanciando il processo AutoDock Vina e restituisce l'energia di legame migliore.
 
@@ -225,7 +228,8 @@ def run_vina_real(vina_exe_path: str, pdbqt_ligand: str, receptor_file: str, cen
             cmd,
             capture_output = True,
             text           = True,
-            check          = True
+            check          = True,
+            timeout        = time_left
         )
         
         for line in result.stdout.splitlines():
@@ -242,9 +246,19 @@ def run_vina_real(vina_exe_path: str, pdbqt_ligand: str, receptor_file: str, cen
                 '# DOI 10.1002/jcc.21334                                         #',
                 '#                                                               #',
                 '# Please see http://vina.scripps.edu for more information.      #',
-                '#################################################################'
-            }:
-                print_verbose(line, to_print = verbose)
+                '#################################################################',
+                'Reading input ... done.',
+                'Setting up the scoring function ... done.',
+                'Analyzing the binding site ... done.',
+                'Performing search ...               ',
+                '',
+                '0%   10   20   30   40   50   60   70   80   90   100%',
+                '|----|----|----|----|----|----|----|----|----|----|',
+                '***************************************************',
+                'done.',
+                'Refining results ... done.',
+            } and "Using random seed:" not in line and "Performing search ..." not in line:
+                # print_verbose(line, to_print = verbose)
                 # Cerca pattern tipo: "   1        -8.5      0.000      0.000"
                 if line.strip().startswith("1"):
                     parts = line.split()
@@ -263,14 +277,17 @@ def run_vina_real(vina_exe_path: str, pdbqt_ligand: str, receptor_file: str, cen
                         # open(vina_output, "w").write(result.stdout)
                         # close(vina_output)
                         return float(parts[1])
-        return 0.0 # Se il parsing fallisce
+        return float('inf') # Se il parsing fallisce
     except subprocess.CalledProcessError as e:
         # Vina ha restituito un codice di errore
         print_error(f"Vina Error Output: {e.stderr}")
-        return 0.0
+        return float('inf')
+    except TimeoutExpired:
+        print_warning(f"[TIME LIMIT] Vina interrotto per sequenza '{Path(pdbqt_ligand).stem.split('_')[0]}': Raggiunto il limite globale del Job.")
+        return float('inf')
     except Exception as e:
         print_error(f"Errore esecuzione Vina (subprocess): {e}")
-        return 0.0
+        return float('inf')
 
 
 # --- Funzione di Valutazione Principale ---
@@ -301,6 +318,8 @@ def evaluate_peptide_binding(candidates: List[str], args: Dict[str, Any]) -> Lis
     hydrophobicity_weight = args.get('hydrophobicity_weight', C.HYDROPHOBICITY_WEIGHT)
     receptor_file         = args.get('receptor_file', C.RECEPTOR_FILE)
     multiprocessing_cache = args.get('multiprocessing_cache', None)
+    global_deadline       = args.get('global_deadline', float('inf'))
+    print_lock            = args.get('print_lock', None)
     
     cx = args.get('center_x', C.CENTER_X)
     cy = args.get('center_y', C.CENTER_Y)
@@ -309,17 +328,17 @@ def evaluate_peptide_binding(candidates: List[str], args: Dict[str, Any]) -> Lis
     sx = args.get('size_x', C.SIZE_X)
     sy = args.get('size_y', C.SIZE_Y)
     sz = args.get('size_z', C.SIZE_Z)
-
+        
     # Cartella temporanea del JOB (deve esistere, creata da main.py)
     # Se per qualche motivo non c'è, usa /tmp locale con fallback
     base_temp = args.get('temp_dir', f"tmp/bioai_ga_{job_id}")
     if not os.path.exists(base_temp):
-        print_verbose(f"[evaluate_peptide_binding] Creazione directory temporanea '{base_temp}' ...", to_print = verbose)
+        print_verbose(f"[evaluate_peptide_binding] Creazione directory temporanea '{base_temp}' ...", to_print = verbose, lock = print_lock)
         os.makedirs(base_temp, exist_ok = True)
         if os.path.exists(base_temp):
-            print_verbose(f"[evaluate_peptide_binding] Done.", to_print = verbose)
+            print_verbose(f"[evaluate_peptide_binding] Done.", to_print = verbose, lock = print_lock)
         else:
-            print_error(f"[evaluate_peptide_binding] Directory temporanea '{base_temp}' non creata!", code = -1)
+            print_error(f"[evaluate_peptide_binding] Directory temporanea '{base_temp}' non creata!", code = -1, lock = print_lock)
 
     fitnesses = []
 
@@ -328,7 +347,7 @@ def evaluate_peptide_binding(candidates: List[str], args: Dict[str, Any]) -> Lis
         seq = candidate.candidate if hasattr(candidate, 'candidate') else candidate
 
         if multiprocessing_cache is not None and seq in multiprocessing_cache:
-            print_verbose(f"[evaluate_peptide_binding] Cache hit per '{seq}'. Recupero fitness da cache.", to_print = verbose)
+            print_verbose(f"[evaluate_peptide_binding] Cache hit per '{seq}'. Recupero fitness da cache.", to_print = verbose, lock = print_lock)
             fitnesses.append(multiprocessing_cache[seq])
             continue
 
@@ -338,12 +357,12 @@ def evaluate_peptide_binding(candidates: List[str], args: Dict[str, Any]) -> Lis
         unique_folder = f"p_{seq}_{job_id}"
         peptide_dir   = os.path.join(base_temp, unique_folder)
 
-        print_verbose(f"[evaluate_peptide_binding] Creazione directory peptide '{seq}' in '{peptide_dir}' ...", to_print = verbose)
+        print_verbose(f"[evaluate_peptide_binding] Creazione directory peptide '{seq}' in '{peptide_dir}' ...", to_print = verbose, lock = print_lock)
         os.makedirs(peptide_dir, exist_ok = True)
         if os.path.exists(peptide_dir):
-            print_verbose(f"[evaluate_peptide_binding] Done.", to_print = verbose)
+            print_verbose(f"[evaluate_peptide_binding] Done.", to_print = verbose, lock = print_lock)
         else:
-            print_error(f"[evaluate_peptide_binding] Directory peptide '{seq}' in '{peptide_dir}' non creata!", code = -1)
+            print_error(f"[evaluate_peptide_binding] Directory peptide '{seq}' in '{peptide_dir}' non creata!", code = -1, lock = print_lock)
 
         unique_id     = f"{seq}_{job_id}" # if same sequence in same gen, overwrite
         base_name  = os.path.join(peptide_dir, unique_id)
@@ -352,15 +371,21 @@ def evaluate_peptide_binding(candidates: List[str], args: Dict[str, Any]) -> Lis
         out_file   = f"{base_name}_out.pdbqt"
         
         try:
+            current_time = time.time()
+            time_left    = global_deadline - current_time
+            if time_left <= 60.0:
+                # Solleviamo manualmente l'errore per andare nel blocco except
+                raise TimeoutExpired(vina_exe_path, 0, f"Tempo globale in esaurimento ({time_left}s <= 60s) prima dell'avvio")
+            
             # 1. Generazione Struttura
-            print_verbose(f"[evaluate_peptide_binding] Generazione Struttura di '{seq}' in '{pdb_file}' ...", to_print = verbose)
+            print_verbose(f"[evaluate_peptide_binding] Generazione Struttura di '{seq}' in '{pdb_file}' ...", to_print = verbose, lock = print_lock)
             generate_pdb_rdkit(seq, pdb_file)
-            print_verbose(f"[evaluate_peptide_binding] Generazione Struttura di '{seq}' in '{pdb_file}' --> Done.", to_print = verbose)
+            print_verbose(f"[evaluate_peptide_binding] Generazione Struttura di '{seq}' in '{pdb_file}' --> Done.", to_print = verbose, lock = print_lock)
             
             # 2. Pybel -> RDKit (Centratura) -> Meeko e poi Docking
-            print_verbose(f"[evaluate_peptide_binding] Conversione di '{pdb_file}' in '{pdbqt_file}' e centrato in ({cx}, {cy}, {cz}) della sequenza '{seq}' ...", to_print = verbose)
+            print_verbose(f"[evaluate_peptide_binding] Conversione di '{pdb_file}' in '{pdbqt_file}' e centrato in ({cx}, {cy}, {cz}) della sequenza '{seq}' ...", to_print = verbose, lock = print_lock)
             if prepare_ligand_openbabel(pdb_file, pdbqt_file, (cx, cy, cz)):
-                print_verbose(f"[evaluate_peptide_binding] Valutazione di Autodock Vina su '{pdbqt_file}' della sequenza '{seq}' ...", to_print = verbose)
+                print_verbose(f"[evaluate_peptide_binding] Valutazione di Autodock Vina su '{pdbqt_file}' della sequenza '{seq}' ...", to_print = verbose, lock = print_lock)
                 energy = run_vina_real(
                     vina_exe_path  = vina_exe_path,
                     pdbqt_ligand   = pdbqt_file,
@@ -370,22 +395,27 @@ def evaluate_peptide_binding(candidates: List[str], args: Dict[str, Any]) -> Lis
                     vina_output    = out_file,
                     cpu            = 1,             # 1 CPU per processo figlio
                     exhaustiveness = args.get('exhaustiveness', C.EXHAUSTIVENESS),
+                    time_left      = time_left,
                     verbose        = verbose
                 )
-                print_verbose(f"[evaluate_peptide_binding] Valutazione di Autodock Vina su '{pdbqt_file}' della sequenza '{seq}' --> Done", to_print = verbose)
+                print_verbose(f"[evaluate_peptide_binding] Valutazione di Autodock Vina su '{pdbqt_file}' della sequenza '{seq}' --> Done", to_print = verbose, lock = print_lock)
                 
                 # usa la hydrophobicity average come penalità per restringere il campo di soluzioni possibili
                 fitnesses.append(energy + (hydrophobicity * hydrophobicity_weight))
                 if multiprocessing_cache is not None:
                     multiprocessing_cache[seq] = fitnesses[-1]
-                print_verbose(f"[evaluate_peptide_binding] Conversione di '{pdb_file}' in '{pdbqt_file}' e centrato in ({cx}, {cy}, {cz}) della sequenza '{seq}' --> Done", to_print = verbose)
+                print_verbose(f"[evaluate_peptide_binding] Conversione di '{pdb_file}' in '{pdbqt_file}' e centrato in ({cx}, {cy}, {cz}) della sequenza '{seq}' --> Done", to_print = verbose, lock = print_lock)
             else:
-                fitnesses.append(0.0)               # Penalità per fallimento prep
-                print_verbose(f"[evaluate_peptide_binding] Conversione di '{pdb_file}' in '{pdbqt_file}' e centrato in ({cx}, {cy}, {cz}) della sequenza '{seq}' --> Fallito", to_print = verbose)
+                fitnesses.append(float('inf'))               # Penalità per fallimento prep
+                print_verbose(f"[evaluate_peptide_binding] Conversione di '{pdb_file}' in '{pdbqt_file}' e centrato in ({cx}, {cy}, {cz}) della sequenza '{seq}' --> Fallito", to_print = verbose, lock = print_lock)
             
+        except TimeoutExpired:
+            print_warning(f"[TIME LIMIT] Valutazione interrotta per sequenza '{seq}': Raggiunto il limite globale del Job.", lock = print_lock)
+            fitnesses.append(float('inf'))                   # Penalità massima per timeout
+        
         except Exception as e:
-            print_error(f"CRITICAL EVAL ERROR of \"{seq}\": {e}")
-            fitnesses.append(0.0)                   # Penalità massima in caso di fallimento
+            print_error(f"CRITICAL EVAL ERROR of \"{seq}\": {e}", lock = print_lock)
+            fitnesses.append(float('inf'))                   # Penalità massima in caso di fallimento
         finally:
             # Pulizia: rimuovi la cartella del singolo peptide
             if os.path.exists(peptide_dir) and not args.get("no_delete", False):
