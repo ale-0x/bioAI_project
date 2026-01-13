@@ -154,7 +154,7 @@ def run_peptide_ga() -> None:
     ea.observer = inspyred.ec.observers.file_observer
     
     # Imposta i parametri e le funzioni
-    # ea.selector = inspyred.ec.selectors.tournament_selection
+    ea.selector = inspyred.ec.selectors.tournament_selection
     ea.replacer = inspyred.ec.replacers.plus_replacement
     
     # 2. Assegna le tue funzioni di Crossover e Mutazione
