@@ -2,18 +2,12 @@
 import random
 
 from inspyred.ec import Individual
-from typing import List, Tuple, Dict, Any, TYPE_CHECKING
+from typing      import List, Tuple, Dict, Any
+
 
 import constants as C
 
 from utils import print_verbose, print_warning
-
-# Solo per l'hinting, evitando dipendenze cicliche o problemi di runtime
-if TYPE_CHECKING:
-    from inspyred.ec.archivers import Archiver
-    from inspyred.ec.ec        import EvolutionaryComputation
-
-
 
 # --- Operatore di Crossover ---
 

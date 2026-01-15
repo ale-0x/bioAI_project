@@ -43,7 +43,7 @@ python3 -u main.py                                              \
     --hydrophobicity_weight 0.10                                \
     --temp_dir_base         $TMP_BASE                           \
     --output                ../results/result                   \
-    --deadline              00:04:00                            \
+    --deadline              24:00:00                            \
     --center_x=8.084                                            \
     --center_y=-13.829                                          \
     --center_z=-0.140                                           \

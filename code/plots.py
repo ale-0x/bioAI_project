@@ -6,11 +6,10 @@ matplotlib.use("Agg")                   # Usa backend non interattivo per salvat
 import csv
 import inspyred.ec.analysis
 import matplotlib.pyplot as plt
-import os
-import random
 
 from inspyred.ec        import Individual
 from matplotlib.colors  import LinearSegmentedColormap
+from pathlib            import Path
 
 
 import constants as C
@@ -20,21 +19,32 @@ from utils              import print_error
 
 gradient_map = LinearSegmentedColormap.from_list("custom_gradient", ['#FF0000', '#FFFF00'])
 
-def plot_observer_statistics(observer_file_path: str) -> None:
+def plot_observer_statistics(observer_file_path: str | Path, plot_folder_directory: str | Path) -> None:
+    observer_file_path    = Path(observer_file_path)
+    plot_folder_directory = Path(plot_folder_directory)
 
-    job_id = os.path.basename(observer_file_path).split('_')[-1].split('.')[0]
-    plot_file = f"../plots/generation_plot_{job_id}.png"
-    inspyred.ec.analysis.generation_plot(open(observer_file_path, 'r'))
-    plt.savefig(plot_file)
+    plot_folder_directory.mkdir(parents = True, exist_ok = True)
+
+    plt.rcParams.update(C.IEEE_PLOT_PARAMS)
+    plt.figure(figsize = (C.IEEE_FIGURE_WIDTH, C.IEEE_FIGURE_HEIGHT))
+    
+    with observer_file_path.open('r') as f:
+        inspyred.ec.analysis.generation_plot(f)
+    
+    plt.savefig(plot_folder_directory / f"generation_plot_{observer_file_path.stem.split('_')[-1]}.png")  # generation_plot_<JobID>.png
+    plt.savefig(plot_folder_directory / f"generation_plot_{observer_file_path.stem.split('_')[-1]}.pdf")  # generation_plot_<JobID>.pdf
     plt.close()
 
-def plot_energy_vs_hydrophobicity(individuals_file: str, hydrophobicity_weight: float = C.HYDROPHOBICITY_WEIGHT) -> None:
+def plot_energy_vs_hydrophobicity(individuals_file: str | Path, plot_folder_directory: str | Path, hydrophobicity_weight: float = C.HYDROPHOBICITY_WEIGHT) -> None:
     """
     scatterplot: energia vs idrofobicità media di ciascun individuo attraverso le generazioni.
     puoi chiamarlo con un individuals_file.csv
     """
+    individuals_file      = Path(individuals_file)
+    plot_folder_directory = Path(plot_folder_directory)
+    
     fig, ax = plt.subplots(figsize=(10, 8))
-    job_id = os.path.basename(individuals_file).split('_')[-1].split('.')[0]
+    job_id = individuals_file.stem.split('_')[-1]
 
     generations_dict = {}
     with open(individuals_file, 'r') as f:
@@ -95,44 +105,55 @@ def plot_energy_vs_hydrophobicity(individuals_file: str, hydrophobicity_weight: 
     ax.set_title(f'Energy vs Hydrophobicity')
     ax.grid(True, alpha=0.3)
 
-    scatter_plot_file = f"../plots/energy_hydrophobicity_{job_id}.png"
+    scatter_plot_file = plot_folder_directory / f"energy_hydrophobicity_{job_id}.png"
     plt.savefig(scatter_plot_file, dpi=150, bbox_inches='tight')
+    plt.savefig(scatter_plot_file.with_suffix(".pdf"), dpi=150, bbox_inches='tight')
     plt.close()
     print(f"Energy vs Hydrophobicity plot saved to {scatter_plot_file}")
 
-def plot_observer_statistics_2(observer_file_path: str) -> None:
-    if not os.path.exists(observer_file_path):
-        print_error(f"File {observer_file_path} non trovato.", code = 0)
-    else:
-        job_id = os.path.basename(observer_file_path).split('_')[-1].split('.')[0]
-        plot_file = f"../plots/generation_plot2_{job_id}.png"
+def plot_observer_statistics_2(observer_file_path: str | Path, plot_folder_directory: str | Path) -> None:
+    observer_file_path    = Path(observer_file_path)
+    plot_folder_directory = Path(plot_folder_directory)
 
-        print(f"Generazione grafico statistiche per Job '{job_id}'...")
+    plot_folder_directory.mkdir(parents = True, exist_ok = True)
 
-        with open(observer_file_path, 'r') as f:
-            data = f.readlines()
-        
-        plt.figure(figsize = (10, 6))
-        inspyred.ec.analysis.generation_plot(data)
-        plt.title(f"Andamento Fitness - Job {job_id}")
-        plt.savefig(plot_file, dpi = 300, bbox_inches = 'tight')
-        plt.close()
-        
-        print(f"Grafico salvato in: {plot_file}")
+    job_id    = observer_file_path.stem.split('_')[-1]
+    plot_file = plot_folder_directory / f"generation_plot_{job_id}.png"
 
-def plot_energy_vs_hydrophobicity_2(individuals_file: str, hydrophobicity_weight: float = C.HYDROPHOBICITY_WEIGHT) -> None:
+    plt.rcParams.update(C.IEEE_PLOT_PARAMS)
+    plt.figure(figsize = (C.IEEE_FIGURE_WIDTH, C.IEEE_FIGURE_HEIGHT))
+    
+    print(f"Generazione grafico statistiche per Job '{job_id}'...")
+    with observer_file_path.open('r') as f:
+        inspyred.ec.analysis.generation_plot(f)
+    
+    plt.title(f"Andamento Fitness - Job {job_id}")
+    plt.savefig(plot_file)
+    plt.savefig(plot_file.with_suffix(".pdf"))
+    plt.close()
+
+    print(f"Grafico salvato in: {plot_file}")
+
+
+def plot_energy_vs_hydrophobicity_2(individuals_file: str | Path, plot_folder_directory: str | Path, hydrophobicity_weight: float = C.HYDROPHOBICITY_WEIGHT) -> None:
     """
     scatterplot: energia vs idrofobicità media di ciascun individuo attraverso le generazioni.
     puoi chiamarlo con un individuals_file.csv
     """
-    if not os.path.exists(individuals_file):
+    individuals_file      = Path(individuals_file)
+    plot_folder_directory = Path(plot_folder_directory)
+
+    plot_folder_directory.mkdir(parents = True, exist_ok = True)
+
+    if not individuals_file.exists():
         print_error(f"File {individuals_file} non trovato.", code = 0)
         return
     
-    job_id = os.path.basename(individuals_file).split('_')[-1].split('.')[0]
+    job_id    = individuals_file.stem.split('_')[-1]
+    plot_file = plot_folder_directory / f"energy_hydrophobicity_evol_{job_id}.png"
     
     generations_dict = {}
-    with open(individuals_file, 'r') as f:
+    with individuals_file.open('r') as f:
         reader = csv.reader(f)
         for row in reader:
             if not row: continue                # Salta righe vuote
@@ -142,7 +163,7 @@ def plot_energy_vs_hydrophobicity_2(individuals_file: str, hydrophobicity_weight
                 gen      = int(row[0])
                 fitness  = float(row[2])
                 sequence = row[3].strip()
-            except ValueError:
+            except (ValueError, IndexError):
                 continue                        # Salta header o righe malformate
             
             if gen not in generations_dict:
@@ -160,85 +181,86 @@ def plot_energy_vs_hydrophobicity_2(individuals_file: str, hydrophobicity_weight
         print("Nessun dato trovato per il plot.")
         return
     
+    plt.rcParams.update(C.IEEE_PLOT_PARAMS)
     fig, ax = plt.subplots(figsize = (12, 8))
-    max_gen = max(generations_dict.keys())                      # Get max generation for color normalization
+    
+    max_gen     = max(generations_dict.keys())                      # Get max generation for color normalization
+    sorted_gens = sorted(generations_dict.keys())
 
     # Liste per tracciare la linea del migliore per generazione
     best_gen_energy = []
     best_gen_hydro  = []
 
-    all_individuals = [ind for gen_list in generations_dict.values() for ind in gen_list]
-    sorted_gens     = sorted(generations_dict.keys())
-
     for gen in sorted_gens:
         individuals = generations_dict[gen]
         if len(individuals) > 1:
-            individuals.sort(key=lambda x: x.energy_val)                # Ordiniamo per energia per avere una linea pulita
+            assert isinstance(individuals, list)
+            individuals.sort(key = lambda x: x.energy_val)                  # Ordiniamo per energia per avere una linea pulita
             
             gen_energies = [ind.energy_val     for ind in individuals]
             gen_hydros   = [ind.hydrophobicity for ind in individuals]
-            
-            color_val = gen / max_gen if max_gen > 0 else 0             # Colore basato sulla generazione
+            color_val    = gen / max_gen if max_gen > 0 else 0              # Colore basato sulla generazione
             
             ax.plot(
                 gen_energies, gen_hydros, 
                 color     = gradient_map.reversed()(color_val), 
-                alpha     = 0.4,                                        # Leggera trasparenza per non coprire i punti
-                linewidth = 1
+                alpha     = 0.4,                                            # Leggera trasparenza per non coprire i punti
+                linewidth = 0.8,
+                zorder    = 1,                                              # Linee sotto i punti
             )
 
-    energies = [ind.energy_val     for ind in all_individuals]
-    hydros   = [ind.hydrophobicity for ind in all_individuals]
-    colors   = [ind.birthdate      for ind in all_individuals]
-
+    all_individuals = [ind for gen_list in generations_dict.values() for ind in gen_list]
     sc = ax.scatter(
-        energies, hydros, 
-        c          = colors, 
+        [ind.energy_val     for ind in all_individuals],
+        [ind.hydrophobicity for ind in all_individuals], 
+        c          = [ind.birthdate      for ind in all_individuals], 
         cmap       = gradient_map.reversed(), 
         s          = 80, 
         alpha      = 0.8,
-        edgecolors = 'grey',
+        edgecolors = 'none',
         linewidth  = 0.5,
-        zorder     = 10                                                 # Assicura che i pallini siano SOPRA le linee
+        zorder     = 2                                                      # Assicura che i pallini siano SOPRA le linee
     )
 
     for gen in sorted_gens:
         best_in_gen = min(generations_dict[gen], key = lambda x: x.energy_val)
         best_gen_energy.append(best_in_gen.energy_val)
-        best_gen_hydro.append(best_in_gen.hydrophobicity)
+        best_gen_hydro .append(best_in_gen.hydrophobicity)
 
     ax.plot(best_gen_energy, best_gen_hydro, 
-        color     = 'green',
+        color     = '#2ECC71',
         linestyle = '--',
-        alpha     = 0.6,
+        alpha     = 0.8,
         linewidth = 1.5,
         label     = "Best Trajectory",
-        zorder    = 11
+        zorder    = 3
     )
 
     global_best = min(all_individuals, key = lambda x: x.fitness)
-    ax.text(
-        global_best.energy_val, 
-        global_best.hydrophobicity, 
-        f" BEST: {global_best.candidate}\n({global_best.energy_val:.2f})", 
+    ax.annotate(
+        f" BEST: {global_best.candidate}\n({global_best.energy_val:.2f})",
+        xy         = (global_best.energy_val, global_best.hydrophobicity),
+        xytext     = (-20, 15),
+        textcoords = 'offset points',
         fontsize   = 9, 
         fontweight = 'bold',
-        ha         = 'right', 
-        va         = 'bottom',
+        arrowprops = dict(arrowstyle = '->', color = 'black'),
+        ha         = 'right',
+        va         = 'bottom', 
         color      = 'black',
-        zorder     = 12
+        zorder     = 4
     )
 
     cbar = plt.colorbar(sc, ax = ax)
-    cbar.set_label('Generation', rotation = 270, labelpad = 20)
+    cbar.set_label('Generation', rotation = 270, labelpad = 15)
 
-    ax.set_xlabel('Binding Energy (kcal/mol) [Lower is Better]')
+    ax.set_xlabel('Binding Energy (kcal/mol)')
     ax.set_ylabel('Hydrophobicity Index (pH 7)')
-    ax.set_title(f'Evolution Landscape: Energy vs Hydrophobicity (Job {job_id})')
+    ax.set_title(f'Evolution Landscape (Job {job_id})')
     ax.grid(True, linestyle = '--', alpha = 0.3)
 
-    scatter_plot_file = f"../plots/energy_hydrophobicity2_{job_id}.png"
-    plt.savefig(scatter_plot_file, dpi = 300, bbox_inches = 'tight')
+    plt.savefig(plot_file)
+    plt.savefig(plot_file.with_suffix(".pdf"))
     plt.close()
 
-    print(f"Energy vs Hydrophobicity plot saved to {scatter_plot_file}")
+    print(f"Energy vs Hydrophobicity plot saved to {plot_file}")

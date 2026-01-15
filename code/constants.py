@@ -4,6 +4,7 @@ __author__  = "Alex Callegaro and Clemente Calabrese"
 __version__ = '1.1.0'
 
 from Bio.Align import substitution_matrices
+from pathlib   import Path
 
 SEED = 77
 
@@ -19,8 +20,8 @@ except ImportError:
 
 # --- Preparazione dell'originale .pdb ---
 PROTEIN_NAME      = "2P3D"
-INPUT_PDB_FILE    = f"../resources/pdb/{PROTEIN_NAME}.pdb"
-OUTPUT_PDBQT_FILE = f"../resources/pdbqt/{PROTEIN_NAME}.pdbqt"
+INPUT_PDB_FILE    = Path(f"../resources/pdb/{PROTEIN_NAME}.pdb")
+OUTPUT_PDBQT_FILE = Path(f"../resources/pdbqt/{PROTEIN_NAME}.pdbqt")
 
 # --- Parametri del GA ---
 PEPTIDE_LENGTH  = 10                               # Lunghezza fissa del peptide da evolvere
@@ -39,10 +40,10 @@ CENTER_X, CENTER_Y, CENTER_Z = 8.084, -13.829, -0.140   # Coordinate centro tasc
 SIZE_X, SIZE_Y, SIZE_Z       = 32, 32, 32               # Dimensioni box (Angstrom)
 CPUS                         = 8
 EXHAUSTIVENESS               = 8                        # Precisione di ricerca (8 è default, 32 è lento ma preciso)
-VINA_EXE_PATH                = "vina"                   # Assumi che 'vina' sia nel PATH
+VINA_EXE_PATH                = Path("vina")             # Assumi che 'vina' sia nel PATH
 
 # --- Parametri per la Idrofobicità ---
-HYDROPHOBICITY_WEIGHT = 0.1         # Peso della somma di idrofobicità nella funzione di fitness
+HYDROPHOBICITY_WEIGHT = 0.02        # Peso della somma di idrofobicità nella funzione di fitness
 AMINO_HYDROPHOBICITY_PH7 = {        # Hydrophobicity index at pH 7 (from Monera, O. D., et al. Relationship of Sidechain Hydrophobicity and Alpha-Helical Propensity on the Stability of the Single-Stranded Amphipathic Alpha-Helix. J Pept Sci. (1995).)
     'L': 97,   # Leucine
     'I': 99,   # Isoleucine
@@ -64,4 +65,24 @@ AMINO_HYDROPHOBICITY_PH7 = {        # Hydrophobicity index at pH 7 (from Monera,
     'K': -23,  # Lysine
     'N': -28,  # Asparagine
     'P': 5     # Proline (using the 6.5 value provided)
+}
+
+# --- Paramerti per la produzione di plot in stile IEEE ---
+
+IEEE_FIGURE_WIDTH  = 3.5            # Larghezza figura in pollici
+IEEE_FIGURE_HEIGHT = 2.5            # Altezza figura in pollici
+
+# Configurazione completa stile IEEE
+IEEE_PLOT_PARAMS = {
+    "font.family"    : "serif",
+    "font.serif"     : ["Times New Roman", "Liberation Serif", "DejaVu Serif", "serif"],
+    "font.size"      : 10,
+    "axes.labelsize" : 10,
+    "axes.titlesize" : 10,
+    "legend.fontsize": 8,
+    "xtick.labelsize": 8,
+    "ytick.labelsize": 8,
+    "lines.linewidth": 1.5,
+    "figure.dpi"     : 300,
+    "savefig.bbox"   : "tight",
 }
