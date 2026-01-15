@@ -1,15 +1,13 @@
 # prepare_receptor.py
-import os
-import sys
-
-# Importiamo l'interfaccia Python di OpenBabel
 from openbabel import pybel
-from openbabel import openbabel
+from pathlib   import Path
+
 
 from constants import INPUT_PDB_FILE, OUTPUT_PDBQT_FILE
+from utils     import print_error
 
 
-def prepare_receptor_pdbqt(input_pdb_file: str, output_pdbqt_file: str) -> bool:
+def prepare_receptor_pdbqt(input_pdb_file: str | Path, output_pdbqt_file: str | Path) -> bool:
     """
     Prepara il recettore da PDB a PDBQT usando OpenBabel.
 
@@ -34,16 +32,18 @@ def prepare_receptor_pdbqt(input_pdb_file: str, output_pdbqt_file: str) -> bool:
     `bool`
         True se la preparazione è stata completata con successo, False altrimenti.
     """
-    if not os.path.exists(input_pdb_file):
-        print(f"ERRORE: File PDB di input non trovato: {input_pdb_file}")
-        print("Assicurati di aver scaricato il file .pdb e rinominato correttamente.")
+    input_pdb_file    = Path(input_pdb_file)
+    output_pdbqt_file = Path(output_pdbqt_file)
+
+    if not input_pdb_file.exists():
+        print_error(f"ERRORE: File PDB di input non trovato: {input_pdb_file.resolve()}. Assicurati di aver scaricato il file .pdb e rinominato correttamente.")
         return False
     
     try:
-        print(f"Lettura PDB: {input_pdb_file}...")
+        print(f"Lettura PDB: {input_pdb_file} ...")
         
         # 1. Lettura del file PDB
-        mol = next(pybel.readfile("pdb", input_pdb_file))
+        mol = next(pybel.readfile("pdb", str(input_pdb_file)))
         obmol = mol.OBMol # Oggetto C++ sottostante
         
         # 2. Pulizia Manuale (Rimozione HOH e Ioni)
@@ -71,17 +71,17 @@ def prepare_receptor_pdbqt(input_pdb_file: str, output_pdbqt_file: str) -> bool:
         obmol.AddHydrogens(False, True, 7.4) 
 
         # 5. Scrittura PDBQT (OpenBabel crea un file con ROOT/BRANCH qui)
-        print(f"Scrittura PDBQT: {output_pdbqt_file}...")
-        mol.write("pdbqt", output_pdbqt_file, overwrite=True)
+        print(f"Scrittura PDBQT: {output_pdbqt_file} ...")
+        mol.write("pdbqt", str(output_pdbqt_file), overwrite = True)
         
         # --- [NUOVO PASSAGGIO] 6. Post-processing per Vina (Rimuove flessibilità) ---
         # Riapriamo il file appena creato per rimuovere i tag che mandano in crash Vina
         print("  - Post-processing: Rimozione tag flessibilità (ROOT/BRANCH)...")
         
-        with open(output_pdbqt_file, 'r') as f:
+        with output_pdbqt_file.open('r') as f:
             lines = f.readlines()
             
-        with open(output_pdbqt_file, 'w') as f:
+        with output_pdbqt_file.open('w') as f:
             for line in lines:
                 # Scriviamo la riga SOLO se NON è un tag di flessibilità
                 if not (
@@ -103,7 +103,7 @@ def prepare_receptor_pdbqt(input_pdb_file: str, output_pdbqt_file: str) -> bool:
         traceback.print_exc()
         return False
 
-def fix_receptor_pdbqt(pdbqt_path) -> None:
+def fix_receptor_pdbqt(pdbqt_path: str | Path) -> None:
     """
     Post-processa il file PDBQT del recettore per rimuovere le definizioni di flessibilità (rigidificazione).
 
@@ -131,7 +131,9 @@ def fix_receptor_pdbqt(pdbqt_path) -> None:
     - ``TORSDOF``
     - ``REMARK`` (solo quelli relativi a "active torsions")
     """
-    with open(pdbqt_path, 'r') as f:
+    pdbqt_path = Path(pdbqt_path)
+
+    with pdbqt_path.open('r') as f:
         lines = f.readlines()
 
     new_lines = []
@@ -151,7 +153,7 @@ def fix_receptor_pdbqt(pdbqt_path) -> None:
         new_lines.append(line)
 
     # Sovrascrive il file con la versione pulita
-    with open(pdbqt_path, 'w') as f:
+    with pdbqt_path.open('w') as f:
         f.writelines(new_lines)
     
     print(f"--- File recettore corretto per Vina (rimossi tag flessibilità): {pdbqt_path} ---")
@@ -161,9 +163,8 @@ if __name__ == '__main__':
     print("--- Utilità di Preparazione del Recettore Vina ---")
     
     # 1. Verifichiamo i prerequisiti (es. file 7cam.pdb)
-    if not os.path.exists(INPUT_PDB_FILE):
-        print(f"\n[INFO] Necessario: Devi prima scaricare la struttura PDB e salvarla come '{INPUT_PDB_FILE}'.")
-        sys.exit(1)
+    if not INPUT_PDB_FILE.exists():
+        print_error(f"\n[INFO] Necessario: Devi prima scaricare la struttura PDB e salvarla come '{INPUT_PDB_FILE}'.", code = -1)
         
     # 2. Eseguiamo la preparazione
     success = prepare_receptor_pdbqt(INPUT_PDB_FILE, OUTPUT_PDBQT_FILE)

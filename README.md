@@ -66,7 +66,7 @@ Or manually:
 
 ```bash
 # 1. Create and activate the environment
-conda create -n bioai python=3.9
+conda create -n bioai python=3.12.12
 conda activate bioai
 
 # 2. Install chemical and analysis tools from conda-forge

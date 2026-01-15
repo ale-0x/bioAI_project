@@ -1,15 +1,12 @@
 ######################### IMPORTS #########################
 
-import os
 import time
 
-# from _typeshed import SupportsWrite
-from argparse import Namespace
-from pathlib import Path, PurePath
-from sys import stderr, exit
-from threading import Lock
-from typing import Any, Union
-from typing_extensions import Literal
+from argparse   import Namespace
+from contextlib import nullcontext
+from sys        import stderr, exit
+from threading  import Lock
+from typing     import Any
 
 ################# VARIABLES AND CONSTANTS #################
 
@@ -28,247 +25,192 @@ ERROR         : str = "<ERROR> ---->"
 VERB          : str = "<VERBOSE> -->"
 WARNING       : str = "<WARNING> -->"
 
-######################## CLASSES ########################
-
-class AutoResolvePath:
-    def __init__(self, path: Union["AutoResolvePath", bytes, os.PathLike, Path, str]) -> None:
-        if isinstance(path, str):
-            if len(path) > 0 and path[0] == "~":
-                self._path = Path(f"{Path.home()}/{path[1:]}")
-            else:
-                self._path = Path(path)
-        elif isinstance(path, AutoResolvePath):
-            self._path = Path(path._path)
-        else:
-            self._path = Path(path)
-    
-    def __getattr__(self, name: str) -> Any:
-        return getattr(self._path, name)
-    
-    def __truediv__(self, other: Union[PurePath, "AutoResolvePath", str]) -> "AutoResolvePath":
-        if isinstance(other, PurePath) or isinstance(other, AutoResolvePath):
-            return AutoResolvePath(f"{self._path}/{other._path}")
-        elif isinstance(other, str):
-            return AutoResolvePath(f"{self._path}/{other}")
-        else:
-            raise TypeError(f"'other' object of type '{type(other)}' can't be concatenated to an 'AutoResolvePath' object")
-
-    def __str__(self) -> str:
-        return self._path.__str__()
-    
-    def __repr__(self) -> str:
-        return self._path.__repr__()
-
 ######################## FUNCTIONS ########################
 
 def color_text(color_code: str, *text: str, sep: str | None = " ", end: str | None = "",) -> str:
+    """
+    Format a string with ANSI color codes.
+
+    This utility wraps the provided text between the specified color code 
+    and the global reset code (COL_RESET).
+
+    Parameters
+    ----------
+    color_code : str
+        The ANSI escape sequence for the desired color (e.g., COL_RED).
+    *text : str
+        One or more strings to be colored.
+    sep : str, optional
+        The separator used to join multiple text arguments. Defaults to " ".
+    end : str, optional
+        An optional string to append at the very end (after the reset code). 
+        Defaults to an empty string.
+
+    Returns
+    -------
+    str
+        The formatted string with color codes applied.
+        
+    Examples
+    --------
+    >>> color_text(COL_RED, "Critical", "Error")
+    '\\033[31mCritical Error\\033[0m'
+    """
     return f"{color_code}{sep.join(text)}{COL_RESET}{end}"
 
-def print_info(*values: object, to_print: bool = True, sep: str | None = " ", end: str | None = "\n", file = None, flush: Literal[False] = False, prefix: str = INFO, lock: Lock = None) -> None:
+def _base_print(*values: object, color: str | None = None, prefix: str = "", to_print: bool = True, sep: str = " ", end: str = "\n", file: Any = None, flush: bool = False, lock: Lock = None) -> None:
     """
-    Print info in `*values` to the stream `text` file, separed by `sep` and followed by `end`.
+    Internal helper to handle thread-safe printing with optional colors and prefixes.
+    """
+    if not to_print:
+        return
+
+    context = lock if lock else nullcontext()
+    
+    with context:
+        # Costruiamo gli argomenti: [Colore, Prefisso (se c'è), Valori..., Reset]
+        output = []
+        if color : output.append(color)
+        if prefix: output.append(prefix)
+        
+        # Uniamo tutto e stampiamo
+        print(
+            *output, *values, COL_RESET if color else "",
+            sep   = sep,
+            end   = end,
+            file  = file,
+            flush = flush
+        )
+
+def print_info(*values: object, **kwargs) -> None:
+    """
+    Print an informational message in light blue.
 
     Parameters
     ----------
-    *values : `object`
-        One or more values or expressions to print on file or stream.
-    
-    to_print : `bool`, default `True`, optional
-        If `True`, print to file or stream.
-    
-    sep : `str` | `None`, default ` `, optional
-        Separator between objects.
-
-    end : `str` | `None`, default `\\n`, optional
-        Character to add at the end.
-    
-    file : `SupportsWrite[str]` | `None`, default `None`, optional
-        File or stream to write output to.
-    
-    flush : `Literal[False]`, default `False`, optional
-        If `True`, flush the buffer immediately.
+    *values : object
+        One or more values or expressions to be printed.
+    color : str, optional
+        ANSI color escape sequence. Defaults to COL_LIGHT_BLUE.
+    prefix : str, optional
+        Prefix to display before the message. Defaults to the global INFO constant.
+        If set to an empty string (""), no prefix is shown.
+    to_print : bool, optional
+        If False, the message will not be printed. Defaults to True.
+    sep : str, optional
+        Separator between objects. Defaults to " ".
+    end : str, optional
+        String appended after the last value. Defaults to "\\n".
+    file : file-like object, optional
+        Output stream. Defaults to sys.stdout.
+    flush : bool, optional
+        Whether to forcibly flush the stream. Defaults to False.
+    lock : multiprocessing.Lock, optional
+        Lock object to ensure process-safe output.
     """
-    if lock:
-        with lock:
-            if to_print:
-                if prefix == "":
-                    print(
-                        *(COL_LIGHT_BLUE, *values, COL_RESET),
-                        sep = sep,
-                        end = end,
-                        file = file,
-                        flush = flush
-                    ) 
-                else:
-                    print(
-                        *(COL_LIGHT_BLUE, prefix, *values, COL_RESET),
-                        sep = sep,
-                        end = end,
-                        file = file,
-                        flush = flush
-                    )
-    else:
-        if to_print:
-            if prefix == "":
-                print(
-                    *(COL_LIGHT_BLUE, *values, COL_RESET),
-                    sep = sep,
-                    end = end,
-                    file = file,
-                    flush = flush
-                ) 
-            else:
-                print(
-                    *(COL_LIGHT_BLUE, prefix, *values, COL_RESET),
-                    sep = sep,
-                    end = end,
-                    file = file,
-                    flush = flush
-                )
+    kwargs.setdefault('color', COL_LIGHT_BLUE)
+    kwargs.setdefault('prefix', INFO)
+    _base_print(*values, **kwargs)
     
 
-def print_error(*values: object, code: int = 0, to_print: bool = True, sep: str | None = " ", end: str | None = "\n", file = stderr, flush: Literal[False] = False, lock: Lock = None) -> None:
+def print_error(*values: object, code: int = 0, **kwargs) -> None:
     """
-    Print error in `*values` to the stream `text` file, separed by `sep` and followed by `end`. If `code` different of 0, exit with `code`.
+    Print an error message in red and optionally exit the program.
 
     Parameters
     ----------
-    *values : `object`
-        One or more values or expressions to print on file or stream.
-    
-    code : `int`, default `-1`, optional
-        Program execution exit code. If equal to `0` then the error won't cause the program to exit.
-    
-    to_print : `bool`, default `True`, optional
-        If `True`, print to file or stream.
-    
-    sep : `str` | `None`, default ` `, optional
-        Separator between objects.
-
-    end : `str` | `None`, default `\\n`, optional
-        Character to add at the end.
-    
-    file : `SupportsWrite[str]` | `None`, default `None`, optional
-        File or stream to write output to.
-    
-    flush : `Literal[False]`, default `False`, optional
-        If `True`, flush the buffer immediately.
+    *values : object
+        One or more values or expressions to be printed.
+    code : int, optional
+        Exit code for the program. If non-zero, the program terminates 
+        with this status. Defaults to 0 (no exit).
+    color : str, optional
+        ANSI color escape sequence. Defaults to COL_RED.
+    prefix : str, optional
+        Prefix to display before the message. Defaults to the global ERROR constant.
+        If set to an empty string (""), no prefix is shown.
+    to_print : bool, optional
+        If False, the message will not be printed. Defaults to True.
+    sep : str, optional
+        Separator between objects. Defaults to " ".
+    end : str, optional
+        String appended after the last value. Defaults to "\\n".
+    file : file-like object, optional
+        Output stream. Defaults to sys.stderr.
+    flush : bool, optional
+        Whether to forcibly flush the stream. Defaults to False.
+    lock : multiprocessing.Lock, optional
+        Lock object to ensure process-safe output.
     """
-    if lock:
-        with lock:
-            if to_print:
-                print(
-                    *(COL_RED, ERROR, *values, COL_RESET),
-                    sep = sep,
-                    end = end,
-                    file = file,
-                    flush = flush
-                )
+    kwargs.setdefault('file', stderr)
+    kwargs.setdefault('color', COL_RED)
+    kwargs.setdefault('prefix', ERROR)
 
-            if code != 0:
-                exit(code)
-    else:
-        if to_print:
-            print(
-                *(COL_RED, ERROR, *values, COL_RESET),
-                sep = sep,
-                end = end,
-                file = file,
-                flush = flush
-            )
+    _base_print(*values, **kwargs)
 
-        if code != 0:
-            exit(code)
+    if code != 0:
+        exit(code)
 
-def print_verbose(*values: object, to_print: bool = True, sep: str | None = " ", end: str | None = "\n", file = None, flush: Literal[False] = False, lock: Lock = None) -> None:
+def print_verbose(*values: object, to_print: bool = True, **kwargs) -> None:
     """
-    Print verbose in `*values` to the stream `text` file, separed by `sep` and followed by `end`.
+    Print a warning message, typically in purple.
 
     Parameters
     ----------
-    *values : `object`
-        One or more values or expressions to print on file or stream.
-    
-    to_print : `bool`, default `True`, optional
-        If `True`, print to file or stream.
-    
-    sep : `str` | `None`, default ` `, optional
-        Separator between objects.
-
-    end : `str` | `None`, default `\\n`, optional
-        Character to add at the end.
-    
-    file : `SupportsWrite[str]` | `None`, default `None`, optional
-        File or stream to write output to.
-    
-    flush : `Literal[False]`, default `False`, optional
-        If `True`, flush the buffer immediately.
+    *values : object
+        One or more values or expressions to be printed.
+    color : str, optional
+        ANSI color escape sequence. Defaults to COL_YELLOW.
+    prefix : str, optional
+        Prefix to display before the message. Defaults to the global VERBOSE constant.
+        If set to an empty string (""), no prefix is shown.
+    to_print : bool, optional
+        If False, the message will not be printed. Defaults to True.
+    sep : str, optional
+        Separator between objects. Defaults to " ".
+    end : str, optional
+        String appended after the last value. Defaults to "\\n".
+    file : file-like object, optional
+        Output stream. Defaults to sys.stdout.
+    flush : bool, optional
+        Whether to forcibly flush the stream. Defaults to False.
+    lock : multiprocessing.Lock, optional
+        Lock object to ensure process-safe output.
     """
-    if lock:
-        with lock:
-            if to_print:
-                print(
-                    # *(COL_YELLOW, VERB, *values, COL_RESET),
-                    *(VERB, *values),
-                    sep = sep,
-                    end = end,
-                    file = file,
-                    flush = flush
-                )
-    else:
-        if to_print:
-            print(
-                # *(COL_YELLOW, VERB, *values, COL_RESET),
-                *(VERB, *values),
-                sep = sep,
-                end = end,
-                file = file,
-                flush = flush
-            )
+    kwargs.setdefault('color', COL_YELLOW)
+    kwargs.setdefault('prefix', VERB)
 
-def print_warning(*values: object, to_print: bool = True, sep: str | None = " ", end: str | None = "\n", file = None, flush: Literal[False] = False, lock: Lock = None) -> None:
+    _base_print(*values, **kwargs)
+
+def print_warning(*values: object, **kwargs) -> None:
     """
-    Print warning in `*values` to the stream `text` file, separed by `sep` and followed by `end`.
+    Print a warning message, typically in purple.
 
     Parameters
     ----------
-    *values : `object`
-        One or more values or expressions to print on file or stream.
-    
-    to_print : `bool`, default `True`, optional
-        If `True`, print to file or stream.
-    
-    sep : `str` | `None`, default ` `, optional
-        Separator between objects.
-
-    end : `str` | `None`, default `\\n`, optional
-        Character to add at the end.
-    
-    file : `SupportsWrite[str]` | `None`, default `None`, optional
-        File or stream to write output to.
-    
-    flush : `Literal[False]`, default `False`, optional
-        If `True`, flush the buffer immediately.
+    *values : object
+        One or more values or expressions to be printed.
+    color : str, optional
+        ANSI color escape sequence. Defaults to COL_PURPLE.
+    prefix : str, optional
+        Prefix to display before the message. Defaults to the global WARNING constant.
+        If set to an empty string (""), no prefix is shown.
+    to_print : bool, optional
+        If False, the message will not be printed. Defaults to True.
+    sep : str, optional
+        Separator between objects. Defaults to " ".
+    end : str, optional
+        String appended after the last value. Defaults to "\\n".
+    file : file-like object, optional
+        Output stream. Defaults to sys.stdout.
+    flush : bool, optional
+        Whether to forcibly flush the stream. Defaults to False.
+    lock : multiprocessing.Lock, optional
+        Lock object to ensure process-safe output.
     """
-    if lock:
-        with lock:
-            if to_print:
-                print(
-                    *(COL_PURPLE, WARNING, *values, COL_RESET),
-                    sep = sep,
-                    end = end,
-                    file = file,
-                    flush = flush
-                )
-    else:
-        if to_print:
-            print(
-                *(COL_PURPLE, WARNING, *values, COL_RESET),
-                sep = sep,
-                end = end,
-                file = file,
-                flush = flush
-            )
+    kwargs.setdefault('color', COL_PURPLE)
+    kwargs.setdefault('prefix', WARNING)
+    _base_print(*values, **kwargs)
 
 def time_based_termination(population, num_generations, num_evaluations, args):
     """

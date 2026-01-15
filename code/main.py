@@ -1,25 +1,22 @@
 # main.py
 import argparse
 import inspyred.ec
-import matplotlib.pyplot as plt
 import multiprocessing
-import os
 import random
 import shutil
-import subprocess
 import time
 
 from datetime               import datetime, timedelta
 from inspyred.ec            import Individual, terminators
 from inspyred.ec.evaluators import parallel_evaluation_mp
+from pathlib                import Path
 from sys                    import argv
-from typing                 import Any, Optional
 
 import constants as C
 
 from ga_problem             import evaluate_peptide_binding, peptide_generator
-from utils                  import COL_LIGHT_BLUE, color_text, generation_tracker_observer, print_arguments, print_info, print_error, print_verbose, time_based_termination
-from peptide_operators      import blosum_peptide_mutator, peptide_chain_variator, single_point_crossover, get_hydrophobicity
+from utils                  import generation_tracker_observer, print_arguments, print_error, print_verbose, time_based_termination
+from peptide_operators      import peptide_chain_variator, get_hydrophobicity
 from plots                  import plot_energy_vs_hydrophobicity, plot_energy_vs_hydrophobicity_2, plot_observer_statistics, plot_observer_statistics_2
 
 def parse_arguments() -> argparse.Namespace:
@@ -95,7 +92,9 @@ def run_peptide_ga() -> None:
     options = parse_arguments()
 
     RECEPTOR_NAME        : str       = options.receptor_name
-    RECEPTOR_FILE        : str       = options.receptor_file
+    RECEPTOR_FILE        : Path      = Path(options.receptor_file)
+    if not RECEPTOR_FILE.exists():
+        print_error(f"Il file del recettore non esiste: {RECEPTOR_FILE.resolve()}", code = -1)
         
     JOB_ID               : str       = options.job_id
     CPUS                 : int       = options.cpus
@@ -105,8 +104,8 @@ def run_peptide_ga() -> None:
     INITIAL_MUTATION_RATE: float     = options.initial_mutation_rate
     FINAL_MUTATION_RATE  : float     = options.final_mutation_rate
     HYDROPHOBICITY_WEIGHT: float     = options.hydrophobicity_weight
-    TEMP_DIR_BASE        : str       = options.temp_dir_base
-    OUTPUT               : str       = f"{options.output}_{JOB_ID}"
+    TEMP_DIR_BASE        : Path      = Path(options.temp_dir_base)
+    OUTPUT               : Path      = Path(f"{options.output}_{JOB_ID}")
 
     try:
         h, m, s = map(int, options.deadline.split(':')) # formato HH:MM:SS
@@ -121,7 +120,6 @@ def run_peptide_ga() -> None:
         
     except ValueError:
         print_error("Errore nel formato deadline. Usa HH:MM:SS (es. 23:55:00)", code = -1)
-        return
 
     CENTER_X             : float     = options.center_x
     CENTER_Y             : float     = options.center_y
@@ -130,7 +128,7 @@ def run_peptide_ga() -> None:
     SIZE_Y               : int       = options.size_y
     SIZE_Z               : int       = options.size_z
     EXHAUSTIVENESS       : int       = options.exhaustiveness
-    VINA_EXE_PATH        : str       = options.vina_exe_path
+    VINA_EXE_PATH        : Path      = Path(options.vina_exe_path)
 
     NO_DELETE            : bool      = options.no_delete
     VERBOSE              : bool      = options.verbose
@@ -140,14 +138,22 @@ def run_peptide_ga() -> None:
     rand = random.Random()
     # rand.seed(C.SEED)                # Seed per la riproducibilità
 
-    job_temp_dir = os.path.join(TEMP_DIR_BASE, f"bioai_ga_{JOB_ID}")
-    if not os.path.exists(job_temp_dir):
+    job_temp_dir = TEMP_DIR_BASE / f"bioai_ga_{JOB_ID}"
+    if not job_temp_dir.exists():
         print_verbose(f"[run_peptide_ga] Creazione directory temporanea '{job_temp_dir}' ...", to_print = VERBOSE)
-        os.makedirs(job_temp_dir, exist_ok = True)
-        if os.path.exists(job_temp_dir):
+        job_temp_dir.mkdir(parents = True, exist_ok = True)
+        if job_temp_dir.exists():
             print_verbose(f"[run_peptide_ga] Done.", to_print = VERBOSE)
         else:
             print_error(f"[run_peptide_ga] Directory temporanea '{job_temp_dir}' non creata!", code = -1)
+    
+    if not OUTPUT.exists():
+        print_verbose(f"[run_peptide_ga] Creazione directory di output '{OUTPUT}' ...", to_print = VERBOSE)
+        OUTPUT.mkdir(parents = True, exist_ok = True)
+        if OUTPUT.exists():
+            print_verbose(f"[run_peptide_ga] Done.", to_print = VERBOSE)
+        else:
+            print_error(f"[run_peptide_ga] Directory di output '{OUTPUT}' non creata!", code = -1)
     
 
     print(f"--- Start Genetic Algorithm (Peptide Length: {PEPTIDE_LENGTH}) ---")
@@ -218,11 +224,11 @@ def run_peptide_ga() -> None:
             'print_lock'           : print_lock,
         }
 
-        statistics_filepath = f"../observer/ga_observer_{JOB_ID}.csv"
-        individuals_filepath = f"../observer/ga_individuals_{JOB_ID}.csv"
+        statistics_filepath  = OUTPUT / f"ga_observer_{JOB_ID}.csv"
+        individuals_filepath = OUTPUT / f"ga_individuals_{JOB_ID}.csv"
 
-        statistics_file = open(statistics_filepath, 'w')
-        individuals_file = open(individuals_filepath, 'w')
+        statistics_file  = statistics_filepath .open('w')
+        individuals_file = individuals_filepath.open('w')
         
         # Esegui l'EA
         try:
@@ -270,10 +276,10 @@ def run_peptide_ga() -> None:
             print(f"Birthdate      : {datetime.fromtimestamp(best_individual.birthdate).strftime("%d/%m/%Y - %H:%M:%S")}")
 
             # Salva output finale
-            os.makedirs(OUTPUT, exist_ok = True)
-            with open(f"{OUTPUT}/result_{JOB_ID}.txt", "w") as f:
+            with (OUTPUT / f"result_{JOB_ID}.txt").open("w") as f:
                 f.write(f"ID             : {JOB_ID}\n")
-                f.write(f"Receptor       : {RECEPTOR_FILE}\n")
+                f.write(f"Receptor Name  : {RECEPTOR_NAME}\n")
+                f.write(f"Receptor Path  : {RECEPTOR_FILE}\n")
                 f.write(f"Sequence       : {best_individual.candidate}\n")
                 f.write(f"Fitness        : {best_individual.fitness}\n")
                 f.write(f"Binding Energy : {best_individual.fitness - (get_hydrophobicity(best_individual.candidate) * HYDROPHOBICITY_WEIGHT)}\n")
@@ -281,27 +287,29 @@ def run_peptide_ga() -> None:
                 f.write(f"Birthdate      : {datetime.fromtimestamp(best_individual.birthdate).strftime("%d/%m/%Y - %H:%M:%S")}\n")
                 f.write("")
                 f.write(print_arguments(options, JOB_ID, False))
+                f.write("\n")
 
 
-            statistics_file.close()
-            individuals_file.close()
-
-            os.makedirs("../plots", exist_ok = True)  # Ensure the directory exists
-            plot_observer_statistics(observer_file_path = statistics_filepath)
-            plot_energy_vs_hydrophobicity(individuals_file = individuals_filepath, hydrophobicity_weight=HYDROPHOBICITY_WEIGHT)
-            plot_observer_statistics_2(observer_file_path = statistics_filepath)
-            plot_energy_vs_hydrophobicity_2(individuals_file = individuals_filepath, hydrophobicity_weight=HYDROPHOBICITY_WEIGHT)
 
             unique_id     = f"{best_individual.candidate}_{JOB_ID}"         # if same sequence in same gen, overwrite
-            base_name     = os.path.join(job_temp_dir, f"p_{unique_id}", unique_id)
-            output_dir    = os.path.abspath(OUTPUT)           # results folder (destination)
+            base_name     = job_temp_dir / f"p_{unique_id}" / unique_id
+            output_dir    = OUTPUT.resolve()                                # results folder (destination)
             
             shutil.copy2(f"{base_name}.pdb"  , output_dir)
             shutil.copy2(f"{base_name}.pdbqt", output_dir)
 
         finally:
+            # Per evitare che rimangano appesi in caso di crash dell'algoritmo genetico
+            statistics_file .close()
+            individuals_file.close()
+
+            plot_observer_statistics(observer_file_path = statistics_filepath, plot_folder_directory = OUTPUT)
+            plot_energy_vs_hydrophobicity(individuals_file = individuals_filepath, plot_folder_directory = OUTPUT, hydrophobicity_weight = HYDROPHOBICITY_WEIGHT)
+            plot_observer_statistics_2(observer_file_path = statistics_filepath, plot_folder_directory = OUTPUT)
+            plot_energy_vs_hydrophobicity_2(individuals_file = individuals_filepath, plot_folder_directory = OUTPUT, hydrophobicity_weight = HYDROPHOBICITY_WEIGHT)
+
             # Rimuove l'intera cartella temporanea del job alla fine
-            if os.path.exists(job_temp_dir) and not NO_DELETE:
+            if job_temp_dir.exists() and not NO_DELETE:
                 print(f"Pulizia cartella temporanea: {job_temp_dir} ...", end = "")
                 shutil.rmtree(job_temp_dir)
                 print("Done")

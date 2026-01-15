@@ -1,7 +1,8 @@
 # get_vina_coords.py
 import numpy as np
-import os
+
 from pymol import cmd
+
 
 from constants import INPUT_PDB_FILE
 
@@ -56,12 +57,12 @@ def get_centroid(selection: str) -> np.ndarray:
 
 # --- 2. Esecuzione ---
 if __name__ == '__main__':
-    if not os.path.exists(INPUT_PDB_FILE):
-        print(f"ERRORE: File {INPUT_PDB_FILE} non trovato. Scaricalo e posizionalo qui.")
+    if not INPUT_PDB_FILE.exists():
+        print(f"ERRORE: File {INPUT_PDB_FILE.resolve()} non trovato. Scaricalo e posizionalo qui.")
     else:
         try:
             # Carica la struttura PDB
-            cmd.load(INPUT_PDB_FILE)
+            cmd.load(str(INPUT_PDB_FILE))
             
             # Calcola il centro del ligando co-cristallizzato
             center_coords = get_centroid(LIGAND_SELECTION)
@@ -70,6 +71,7 @@ if __name__ == '__main__':
             print("\n=======================================================")
             print("Coordinate Vina (Centro Tasca)")
             print("=======================================================")
+            print(f"File analizzato: {INPUT_PDB_FILE}")
             print(f"Centro Tasca (X, Y, Z):")
             # Stampa le coordinate con 3 decimali
             print(f"X: {center_coords[0]:.3f}, Y: {center_coords[1]:.3f}, Z: {center_coords[2]:.3f}")

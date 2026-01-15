@@ -1,19 +1,17 @@
 # ga_problem.py
-import os
 import numpy as np
 import random
-import re
-import shutil
 import subprocess
 import time
 import uuid
 
-from openbabel  import openbabel, pybel
-from pathlib    import Path
-from rdkit      import Chem
-from rdkit.Chem import AllChem
-from subprocess import TimeoutExpired
-from typing     import Any, Dict, List, Tuple
+from multiprocessing.managers import DictProxy
+from openbabel                import openbabel, pybel
+from pathlib                  import Path
+from rdkit                    import Chem
+from rdkit.Chem               import AllChem
+from subprocess               import TimeoutExpired
+from typing                   import Any, Dict, List, Tuple
 
 
 import constants as C
@@ -55,7 +53,7 @@ def peptide_generator(random: random.Random, args: Dict[str, Any]) -> str:
 
 # --- Funzioni Helper e pipeline di preparazione (RDKit + Meeko) per Struttura e Docking ---
 
-def generate_pdb_rdkit(sequence: str, output_file: str):
+def generate_pdb_rdkit(sequence: str, output_file: str | Path) -> None:
     """
     Genera una conformazione 3D iniziale per un peptide data la sua sequenza.
 
@@ -69,6 +67,8 @@ def generate_pdb_rdkit(sequence: str, output_file: str):
     output_pdb : `str`
         Percorso del file PDB di output da creare.
     """
+    output_file = Path(output_file)
+
     try:
         mol = Chem.MolFromSequence(sequence)
         if mol is None:
@@ -92,11 +92,11 @@ def generate_pdb_rdkit(sequence: str, output_file: str):
         # Rilassa la struttura per evitare atomi sovrapposti
         AllChem.MMFFOptimizeMolecule(mol)
         
-        Chem.MolToPDBFile(mol, output_file)
+        Chem.MolToPDBFile(mol, str(output_file))
     except Exception as e:
         print_error(f"Errore generazione RDKit per {sequence}: {e}")
 
-def prepare_ligand_openbabel(pdb_path: str, pdbqt_output_path: str, center: Tuple[float, float, float]) -> bool:
+def prepare_ligand_openbabel(pdb_path: str | Path, pdbqt_output_path: str | Path, center: Tuple[float, float, float]) -> bool:
     """
     Converte e prepara un file ligando (es. PDB) in formato PDBQT utilizzando OpenBabel.
 
@@ -128,9 +128,12 @@ def prepare_ligand_openbabel(pdb_path: str, pdbqt_output_path: str, center: Tupl
     Richiede che OpenBabel (bindings Python) sia installato correttamente nell'ambiente.
     L'output PDBQT includerà automaticamente i rami ROOT/BRANCH/TORSDOF gestiti da OpenBabel.
     """
+    pdb_path            = Path(pdb_path)
+    pdbqt_output_path   = Path(pdbqt_output_path)
+
     try:
         # 1. Leggi PDB (Generato da RDKit, quindi sicuro)
-        mol = next(pybel.readfile("pdb", pdb_path))
+        mol = next(pybel.readfile("pdb", str(pdb_path)))
         
         # 2. Centratura nella tasca (Box Vina)
         atoms         = [atom.coords for atom in mol] 
@@ -140,9 +143,9 @@ def prepare_ligand_openbabel(pdb_path: str, pdbqt_output_path: str, center: Tupl
         mol.OBMol.Translate(openbabel.vector3(move_v[0], move_v[1], move_v[2]))
         
         # 3. Scrittura PDBQT (OpenBabel calcola le cariche Gasteiger automaticamente)
-        mol.write("pdbqt", pdbqt_output_path, overwrite = True)
+        mol.write("pdbqt", str(pdbqt_output_path), overwrite = True)
         
-        return os.path.exists(pdbqt_output_path) and os.path.getsize(pdbqt_output_path) > 0
+        return pdbqt_output_path.exists() and pdbqt_output_path.stat().st_size > 0
     except StopIteration:
         print_error(f"Errore OpenBabel: File PDB vuoto o invalido: {pdb_path}")
         return False
@@ -151,7 +154,7 @@ def prepare_ligand_openbabel(pdb_path: str, pdbqt_output_path: str, center: Tupl
         return False
     
 
-def run_vina_real(vina_exe_path: str, pdbqt_ligand: str, receptor_file: str, center: Tuple[float, float, float], box_size: Tuple[int, int, int], vina_output: str, cpu: int = 1, exhaustiveness: int = C.EXHAUSTIVENESS, time_left: float = float("inf"), verbose: bool = False) -> float:
+def run_vina_real(vina_exe_path: str | Path, pdbqt_ligand: str | Path, receptor_file: str | Path, center: Tuple[float, float, float], box_size: Tuple[int, int, int], vina_output: str | Path, cpu: int = 1, exhaustiveness: int = C.EXHAUSTIVENESS, time_left: float = float("inf"), verbose: bool = False) -> float:
     """
     Esegue il docking molecolare lanciando il processo AutoDock Vina e restituisce l'energia di legame migliore.
 
@@ -203,9 +206,14 @@ def run_vina_real(vina_exe_path: str, pdbqt_ligand: str, receptor_file: str, cen
     RuntimeError
         Se l'eseguibile di Vina non viene trovato o restituisce un codice di errore.
     """
-    if not os.path.exists(receptor_file):
+    vina_exe_path = Path(vina_exe_path)
+    pdbqt_ligand  = Path(pdbqt_ligand)
+    receptor_file = Path(receptor_file)
+    vina_output   = Path(vina_output)
+
+    if not receptor_file.exists():
         print_error(f"ERRORE CRITICO: Il file recettore non esiste: {receptor_file}")
-        return 0.0
+        return float('inf')
             
     cmd = [
         vina_exe_path,
@@ -312,14 +320,14 @@ def evaluate_peptide_binding(candidates: List[str], args: Dict[str, Any]) -> Lis
         Lista dei valori di fitness (kcal/mol). Valori più bassi indicano legami migliori.
     """
     # Lettura parametri con fallback
-    job_id                = args.get('job_id', str(uuid.uuid4()))
-    verbose               = args.get('verbose', False)
-    vina_exe_path         = args.get('vina_exe_path', C.VINA_EXE_PATH)
-    hydrophobicity_weight = args.get('hydrophobicity_weight', C.HYDROPHOBICITY_WEIGHT)
-    receptor_file         = args.get('receptor_file', C.RECEPTOR_FILE)
-    multiprocessing_cache = args.get('multiprocessing_cache', None)
-    global_deadline       = args.get('global_deadline', float('inf'))
-    print_lock            = args.get('print_lock', None)
+    job_id                : str              = args.get('job_id', str(uuid.uuid4()))
+    verbose               : bool             = args.get('verbose', False)
+    vina_exe_path         : Path             = Path(args.get('vina_exe_path', C.VINA_EXE_PATH))
+    hydrophobicity_weight : float            = args.get('hydrophobicity_weight', C.HYDROPHOBICITY_WEIGHT)
+    receptor_file         : Path             = Path(args.get('receptor_file', C.RECEPTOR_FILE))
+    multiprocessing_cache : DictProxy | None = args.get('multiprocessing_cache', None)
+    global_deadline       : float            = args.get('global_deadline', float('inf'))
+    print_lock            : Any              = args.get('print_lock', None)
     
     cx = args.get('center_x', C.CENTER_X)
     cy = args.get('center_y', C.CENTER_Y)
@@ -331,17 +339,16 @@ def evaluate_peptide_binding(candidates: List[str], args: Dict[str, Any]) -> Lis
         
     # Cartella temporanea del JOB (deve esistere, creata da main.py)
     # Se per qualche motivo non c'è, usa /tmp locale con fallback
-    base_temp = args.get('temp_dir', f"tmp/bioai_ga_{job_id}")
-    if not os.path.exists(base_temp):
+    base_temp = Path(args.get('temp_dir', f"tmp/bioai_ga_{job_id}"))
+    if not base_temp.exists():
         print_verbose(f"[evaluate_peptide_binding] Creazione directory temporanea '{base_temp}' ...", to_print = verbose, lock = print_lock)
-        os.makedirs(base_temp, exist_ok = True)
-        if os.path.exists(base_temp):
+        base_temp.mkdir(parents = True, exist_ok = True)
+        if base_temp.exists():
             print_verbose(f"[evaluate_peptide_binding] Done.", to_print = verbose, lock = print_lock)
         else:
             print_error(f"[evaluate_peptide_binding] Directory temporanea '{base_temp}' non creata!", code = -1, lock = print_lock)
 
     fitnesses = []
-
     for candidate in candidates:
         # Estrai la sequenza se è un oggetto Individual
         seq = candidate.candidate if hasattr(candidate, 'candidate') else candidate
@@ -354,25 +361,22 @@ def evaluate_peptide_binding(candidates: List[str], args: Dict[str, Any]) -> Lis
         hydrophobicity = get_hydrophobicity(seq)
         
         # Crea cartella isolata per questo singolo peptide
-        unique_folder = f"p_{seq}_{job_id}"
-        peptide_dir   = os.path.join(base_temp, unique_folder)
+        peptide_dir   = base_temp / f"p_{seq}_{job_id}"
 
         print_verbose(f"[evaluate_peptide_binding] Creazione directory peptide '{seq}' in '{peptide_dir}' ...", to_print = verbose, lock = print_lock)
-        os.makedirs(peptide_dir, exist_ok = True)
-        if os.path.exists(peptide_dir):
+        peptide_dir.mkdir(parents = True, exist_ok = True)
+        if peptide_dir.exists():
             print_verbose(f"[evaluate_peptide_binding] Done.", to_print = verbose, lock = print_lock)
         else:
             print_error(f"[evaluate_peptide_binding] Directory peptide '{seq}' in '{peptide_dir}' non creata!", code = -1, lock = print_lock)
 
-        unique_id     = f"{seq}_{job_id}" # if same sequence in same gen, overwrite
-        base_name  = os.path.join(peptide_dir, unique_id)
-        pdb_file   = f"{base_name}.pdb"
-        pdbqt_file = f"{base_name}.pdbqt"
-        out_file   = f"{base_name}_out.pdbqt"
+        base_name  = peptide_dir / f"{seq}_{job_id}"
+        pdb_file   = Path(f"{base_name}.pdb")
+        pdbqt_file = Path(f"{base_name}.pdbqt")
+        out_file   = Path(f"{base_name}_out.pdbqt")
         
         try:
-            current_time = time.time()
-            time_left    = global_deadline - current_time
+            time_left    = global_deadline - time.time()
             if time_left <= 60.0:
                 # Solleviamo manualmente l'errore per andare nel blocco except
                 raise TimeoutExpired(vina_exe_path, 0, f"Tempo globale in esaurimento ({time_left}s <= 60s) prima dell'avvio")
@@ -416,9 +420,5 @@ def evaluate_peptide_binding(candidates: List[str], args: Dict[str, Any]) -> Lis
         except Exception as e:
             print_error(f"CRITICAL EVAL ERROR of \"{seq}\": {e}", lock = print_lock)
             fitnesses.append(float('inf'))                   # Penalità massima in caso di fallimento
-        finally:
-            # Pulizia: rimuovi la cartella del singolo peptide
-            if os.path.exists(peptide_dir) and not args.get("no_delete", False):
-                shutil.rmtree(peptide_dir)
             
     return fitnesses
