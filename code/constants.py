@@ -1,49 +1,52 @@
 # constants.py
 
 __author__  = "Alex Callegaro and Clemente Calabrese"
-__version__ = '1.1.0'
+__version__ = '1.2.0'
 
 from Bio.Align import substitution_matrices
 from pathlib   import Path
 
+
 SEED = 77
 
-# I 20 aminoacidi canonici (codici a una lettera)
+# The 20 canonical amino acids (one-letter codes)
 AMINO_ACIDS = 'ACDEFGHIKLMNPQRSTVWY'
 
-# Carica la matrice BLOSUM62
+# Load the BLOSUM62 matrix
 try:
     BLOSUM62 = substitution_matrices.load("BLOSUM62")
 except ImportError:
-    print("ATTENZIONE: Biopython non installato o BLOSUM62 non trovata. La mutazione userà probabilità uniformi.")
+    from utils import print_warning
+    print_warning("Biopython not installed or BLOSUM62 not found. Mutation will use uniform probabilities.")
     BLOSUM62 = None
 
-# --- Preparazione dell'originale .pdb ---
+# --- Preparing the original .pdb ---
 PROTEIN_NAME      = "2P3D"
 INPUT_PDB_FILE    = Path(f"../resources/pdb/{PROTEIN_NAME}.pdb")
 OUTPUT_PDBQT_FILE = Path(f"../resources/pdbqt/{PROTEIN_NAME}.pdbqt")
+SAFETY_MARGIN     = 30
 
-# --- Parametri del GA ---
-PEPTIDE_LENGTH  = 10                               # Lunghezza fissa del peptide da evolvere
-POPULATION_SIZE = 40                                # Dimensione della popolazione per generazione (50?)
-MAX_GENERATIONS = 30                               # Numero massimo di generazioni
+# --- Genetic Algorithm Parameters ---
+PEPTIDE_LENGTH  = 10        # Fixed length of the peptide to evolve
+POPULATION_SIZE = 50        # Population size per generation
+MAX_GENERATIONS = 60        # Maximum number of generations
 
-# --- Parametri Adattivi (Strategia Esplorazione -> Sfruttamento) ---
-CROSSOVER_PROBABILITY = 1.00                        # Probabilità che il crossover avvenga: 100% fa sempre il crossover
-INITIAL_MUTATION_RATE = 0.30                        # 30% all'inizio (Alto caos/esplorazione)
-FINAL_MUTATION_RATE   = 0.05                        # 5% alla fine (Raffinamento/sfruttamento)
+# --- Adaptive Parameters ---
+CROSSOVER_PROBABILITY = 1.00                        # Probability of crossover occurring: 100% fa sempre il crossover
+INITIAL_MUTATION_RATE = 0.70                        # 70% at the beginning (High Chaos/Exploration)
+FINAL_MUTATION_RATE   = 0.20                        # 20% at the end (Refinement/Exploitation)
 
-# --- Configurazione Vina Docking ---
-# ATTENZIONE: Questi valori devono essere specifici per la proteina (es. 7CAM)
-RECEPTOR_FILE                = OUTPUT_PDBQT_FILE        # Il recettore preparato
-CENTER_X, CENTER_Y, CENTER_Z = 8.084, -13.829, -0.140   # Coordinate centro tasca
-SIZE_X, SIZE_Y, SIZE_Z       = 32, 32, 32               # Dimensioni box (Angstrom)
+# --- Vina Docking Setup ---
+# CAUTION: These values ​​must be protein specific (e.g. 2P3D)
+RECEPTOR_FILE                = OUTPUT_PDBQT_FILE        # The prepared receptor
+CENTER_X, CENTER_Y, CENTER_Z = 8.084, -13.829, -0.140   # Pocket center coordinates
+SIZE_X, SIZE_Y, SIZE_Z       = 32, 32, 32               # Box dimensions (Angstroms)
 CPUS                         = 8
-EXHAUSTIVENESS               = 8                        # Precisione di ricerca (8 è default, 32 è lento ma preciso)
-VINA_EXE_PATH                = Path("vina")             # Assumi che 'vina' sia nel PATH
+EXHAUSTIVENESS               = 8                        # Search precision (8 is the default, 32 is slow but precise)
+VINA_EXE_PATH                = Path("vina")             # Assume 'vina' is in the PATH
 
-# --- Parametri per la Idrofobicità ---
-HYDROPHOBICITY_WEIGHT = 0.02        # Peso della somma di idrofobicità nella funzione di fitness
+# --- Hydrophobicity parameters ---
+HYDROPHOBICITY_WEIGHT = 0.02        # Weight of the sum of hydrophobicity in the fitness function
 AMINO_HYDROPHOBICITY_PH7 = {        # Hydrophobicity index at pH 7 (from Monera, O. D., et al. Relationship of Sidechain Hydrophobicity and Alpha-Helical Propensity on the Stability of the Single-Stranded Amphipathic Alpha-Helix. J Pept Sci. (1995).)
     'L': 97,   # Leucine
     'I': 99,   # Isoleucine
@@ -67,12 +70,12 @@ AMINO_HYDROPHOBICITY_PH7 = {        # Hydrophobicity index at pH 7 (from Monera,
     'P': 5     # Proline (using the 6.5 value provided)
 }
 
-# --- Paramerti per la produzione di plot in stile IEEE ---
+# --- Parameters for producing IEEE-style plots ---
 
-IEEE_FIGURE_WIDTH  = 3.5            # Larghezza figura in pollici
-IEEE_FIGURE_HEIGHT = 2.5            # Altezza figura in pollici
+IEEE_FIGURE_WIDTH  = 3.5            # Figure width in inches
+IEEE_FIGURE_HEIGHT = 2.5            # Figure height in inches
 
-# Configurazione completa stile IEEE
+# Complete IEEE style configuration
 IEEE_PLOT_PARAMS = {
     "font.family"    : "serif",
     "font.serif"     : ["Times New Roman", "Liberation Serif", "DejaVu Serif", "serif"],
@@ -86,3 +89,4 @@ IEEE_PLOT_PARAMS = {
     "figure.dpi"     : 300,
     "savefig.bbox"   : "tight",
 }
+

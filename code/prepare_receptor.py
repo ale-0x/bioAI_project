@@ -36,17 +36,17 @@ def prepare_receptor_pdbqt(input_pdb_file: str | Path, output_pdbqt_file: str | 
     output_pdbqt_file = Path(output_pdbqt_file)
 
     if not input_pdb_file.exists():
-        print_error(f"ERRORE: File PDB di input non trovato: {input_pdb_file.resolve()}. Assicurati di aver scaricato il file .pdb e rinominato correttamente.")
+        print_error(f"Input PDB file not found: {input_pdb_file.resolve()}. Make sure you have downloaded the .pdb file and renamed it correctly.")
         return False
     
     try:
-        print(f"Lettura PDB: {input_pdb_file} ...")
+        print(f"PDB reading: {input_pdb_file} ...")
         
-        # 1. Lettura del file PDB
+        # Reading the PDB file
         mol = next(pybel.readfile("pdb", str(input_pdb_file)))
-        obmol = mol.OBMol # Oggetto C++ sottostante
+        obmol = mol.OBMol
         
-        # 2. Pulizia Manuale (Rimozione HOH e Ioni)
+        # Manual Cleaning (HOH and Ion Removal)
         initial_residues = obmol.NumResidues()
         deleted_count = 0
         solvent_names = {"HOH", "WAT", "CL", "NA", "MG", "K", "SO4", "PO4"}
@@ -58,32 +58,32 @@ def prepare_receptor_pdbqt(input_pdb_file: str | Path, output_pdbqt_file: str | 
                 deleted_count += 1
                 
         if deleted_count > 0:
-            print(f"  - Rimossi {deleted_count} residui di solvente/ioni.")
+            print(f"  - Removed {deleted_count} solvent/ion residues.")
 
-        # 3. FIX KEKULIZZAZIONE (Rigenerazione Topologia)
-        print("  - Ricalcolo della connettività chimica (Fix Kekulization)...")
+        # FIX KEKULIZATION (Topology Regeneration)
+        print("  - Recalculating chemical connectivity (Fix Kekulization)...")
         obmol.DeleteHydrogens() 
         obmol.ConnectTheDots() 
         obmol.PerceiveBondOrders()
 
-        # 4. Aggiunta Idrogeni (pH 7.4) e Cariche
-        print("  - Aggiunta idrogeni polari e calcolo cariche...")
+        # Added Hydrogens (pH 7.4) and Charges
+        print("  - Added polar hydrogens and calculated charges...")
         obmol.AddHydrogens(False, True, 7.4) 
 
-        # 5. Scrittura PDBQT (OpenBabel crea un file con ROOT/BRANCH qui)
-        print(f"Scrittura PDBQT: {output_pdbqt_file} ...")
+        # PDBQT writing (OpenBabel creates a file with ROOT/BRANCH here)
+        print(f"PDBQT Writing: {output_pdbqt_file} ...")
         mol.write("pdbqt", str(output_pdbqt_file), overwrite = True)
         
-        # --- [NUOVO PASSAGGIO] 6. Post-processing per Vina (Rimuove flessibilità) ---
-        # Riapriamo il file appena creato per rimuovere i tag che mandano in crash Vina
-        print("  - Post-processing: Rimozione tag flessibilità (ROOT/BRANCH)...")
+        # Post-processing for Vina (Remove Flexibility) ---
+        # Let's reopen the newly created file to remove the tags that crash Vina.
+        print("  - Post-processing: Removing flexibility tags (ROOT/BRANCH)...")
         
         with output_pdbqt_file.open('r') as f:
             lines = f.readlines()
             
         with output_pdbqt_file.open('w') as f:
             for line in lines:
-                # Scriviamo la riga SOLO se NON è un tag di flessibilità
+                # We write the line ONLY if it is NOT a flexibility tag
                 if not (
                     line.startswith('ROOT')      or 
                     line.startswith('ENDROOT')   or 
@@ -94,11 +94,11 @@ def prepare_receptor_pdbqt(input_pdb_file: str | Path, output_pdbqt_file: str | 
                     f.write(line)
         # --------------------------------------------------------------------------
 
-        print("Preparazione completata con successo.")
+        print("Preparation completed successfully.")
         return True
 
     except Exception as e:
-        print(f"ERRORE CRITICO durante la preparazione: {e}")
+        print(f"CRITICAL ERROR during preparation: {e}")
         import traceback
         traceback.print_exc()
         return False
@@ -138,7 +138,7 @@ def fix_receptor_pdbqt(pdbqt_path: str | Path) -> None:
 
     new_lines = []
     for line in lines:
-        # Ignora i tag che definiscono la flessibilità (tipici dei ligandi)
+        # Ignore tags that define flexibility (typical of ligands)
         if line.startswith('ROOT') or \
            line.startswith('ENDROOT') or \
            line.startswith('BRANCH') or \
@@ -146,30 +146,30 @@ def fix_receptor_pdbqt(pdbqt_path: str | Path) -> None:
            line.startswith('TORSDOF'):
             continue
         
-        # Ignora i REMARK che elencano le torsioni attive (pulizia opzionale ma consigliata)
+        # Ignore the REMARKs that list active twists (cleaning is optional but recommended)
         if line.startswith('REMARK') and ('active torsions' in line or 'between atoms' in line):
             continue
 
         new_lines.append(line)
 
-    # Sovrascrive il file con la versione pulita
+    # Overwrites the file with the clean version
     with pdbqt_path.open('w') as f:
         f.writelines(new_lines)
     
-    print(f"--- File recettore corretto per Vina (rimossi tag flessibilità): {pdbqt_path} ---")
+    print(f"--- Fixed receptor file for Vina (flexibility tags removed): {pdbqt_path} ---")
 
 
 if __name__ == '__main__':
-    print("--- Utilità di Preparazione del Recettore Vina ---")
+    print("--- Vina Receptor Preparation Utility ---")
     
-    # 1. Verifichiamo i prerequisiti (es. file 7cam.pdb)
+    # 1. Let's check the prerequisites (e.g. 7cam.pdb file)
     if not INPUT_PDB_FILE.exists():
-        print_error(f"\n[INFO] Necessario: Devi prima scaricare la struttura PDB e salvarla come '{INPUT_PDB_FILE}'.", code = -1)
+        print_error(f"\n[INFO] Required: You must first download the PDB structure and save it as '{INPUT_PDB_FILE}'.", code = -1)
         
-    # 2. Eseguiamo la preparazione
+    # 2. We carry out the preparation
     success = prepare_receptor_pdbqt(INPUT_PDB_FILE, OUTPUT_PDBQT_FILE)
     fix_receptor_pdbqt(OUTPUT_PDBQT_FILE)
     
     if success:
-        print("\nPronto per eseguire l'Algoritmo Genetico.")
-        print(f"Prossimo passo: Eseguire 'python main.py'")
+        print("\nReady to run the Genetic Algorithm.")
+        print(f"Next step: Run 'python main.py'")

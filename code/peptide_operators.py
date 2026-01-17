@@ -9,7 +9,7 @@ import constants as C
 
 from utils import print_verbose, print_warning
 
-# --- Operatore di Crossover ---
+# --- Crossover Operator ---
 
 def single_point_crossover(
     random: random.Random, 
@@ -33,8 +33,6 @@ def single_point_crossover(
     `List[str]`
         Una lista contenente le due nuove sequenze peptidiche (stringhe).
     """
-    
-    # Estraggo la stringa candidata in modo sicuro (come dalla correzione precedente)
     parent1_str: str = parent1.candidate if isinstance(parent1, Individual) else str(parent1)
     parent2_str: str = parent2.candidate if isinstance(parent2, Individual) else str(parent2)
 
@@ -52,7 +50,7 @@ def single_point_crossover(
 
 
 
-# --- Logica per Mutazione BLOSUM ---
+# --- Logic for BLOSUM Mutation ---
 
 def get_blosum_weights(
         original_aa: str,
@@ -84,7 +82,7 @@ def get_blosum_weights(
     punteggi negativi BLOSUM in probabilità positive e amplificare le mutazioni 
     biologicamente favorite.
     """
-    # Ritorna alla selezione uniforme se la matrice non è disponibile
+    # Return to uniform selection if matrix is ​​not available
     if C.BLOSUM62 is None:
         return list(C.AMINO_ACIDS), [1.0] * len(C.AMINO_ACIDS)
         
@@ -93,13 +91,13 @@ def get_blosum_weights(
     
     for target_aa in C.AMINO_ACIDS:
         try:
-            # Recupera il punteggio
-            # Utilizza .get per gestire le coppie (target, original) se non sono simmetriche o presenti
+            # Retrieve the score
+            # Use .get to handle pairs (target, original) if they are not symmetric or present
             score: int = C.BLOSUM62.get((original_aa, target_aa), 0)
         except (KeyError, ValueError):
             continue
 
-        # Trasformazione del punteggio in un peso positivo (stessa logica di prima)
+        # Transforming the score into a positive weight (same logic as before)
         OFFSET  : int   = 5
         EXPONENT: int   = 2
         weight  : float = float(max(1, (score + OFFSET) ** EXPONENT)) 
@@ -111,7 +109,7 @@ def get_blosum_weights(
 
 
 
-# --- Funzione Helper per il Rate Adattivo ---
+# --- Adaptive Rate Helper Function ---
 
 def get_adaptive_mutation_rate(args: Dict[str, Any]) -> float:
     """
@@ -125,7 +123,7 @@ def get_adaptive_mutation_rate(args: Dict[str, Any]) -> float:
     ----------
     args : `Dict[str, Any]`
         Dizionario di argomenti, deve contenere la chiave '_ec' (EvolutionaryComputation) 
-        e 'max_generations' per il calcolo.
+        e 'real_max_gen' per il calcolo.
 
     Returns
     -------
@@ -137,29 +135,31 @@ def get_adaptive_mutation_rate(args: Dict[str, Any]) -> float:
     # Se il GA è a 50 su 100 generazioni (a metà)
     # Rate = 0.30 - (0.30 - 0.05) * 0.5 = 0.175
     """
-    # print_verbose("get_adaptive_mutation_rate:", args)
-    # inspyred passa l'oggetto EvolutionaryComputation in args['_ec']
-    ec = args.get('_ec', None)
+    # inspyred passes the EvolutionaryComputation object into args['_ec']
+    ec                    = args.get('_ec', None)
+    max_gen               = args.get('real_max_gen', C.MAX_GENERATIONS) # Must match MAX_GENERATIONS
+    offset                = args.get('generation_offset', 0)
+    initial_mutation_rate = args.get('initial_mutation_rate', C.INITIAL_MUTATION_RATE)
+    final_mutation_rate   = args.get('final_mutation_rate', C.FINAL_MUTATION_RATE)
     
-    if ec is None:
-        return C.FINAL_MUTATION_RATE # Fallback sicuro
-        
-    current_gen = ec.num_generations
-    max_gen = args.get('max_generations', C.MAX_GENERATIONS) # Deve corrispondere a MAX_GENERATIONS
+    current_gen     = ec.num_generations if ec else 0
+    real_generation = current_gen + offset
     
-    if max_gen == 0: return C.FINAL_MUTATION_RATE
+    if ec is None:   return final_mutation_rate # Secure fallback  
+    if max_gen == 0: return final_mutation_rate
 
     # Progresso da 0.0 a 1.0
-    progress = min(1.0, current_gen / max_gen)
+    progress = min(1.0, real_generation / max_gen)
     
-    # Interpolazione lineare (Lerp)
+    # Linear Interpolation (Lerp)
     # Rate = Start - (Start - End) * Progress
-    current_rate = C.INITIAL_MUTATION_RATE - (C.INITIAL_MUTATION_RATE - C.FINAL_MUTATION_RATE) * progress
-    
-    return current_rate
+    current_rate = initial_mutation_rate - (initial_mutation_rate - final_mutation_rate) * progress
+
+    print_verbose(f"[get_adaptive_mutation_rate] current_rate: {current_rate}", to_print = args.get('verbose', False), lock = args.get('print_lock', None))
+    return max(final_mutation_rate, current_rate)
 
 
-# --- Operatore di Mutazione ---
+# --- Mutation Operator ---
 
 def blosum_peptide_mutator(
         random   : random.Random, 
@@ -194,25 +194,24 @@ def blosum_peptide_mutator(
     >>> print(mutated_seq) 
     'IVTA' # Esempio di mutazione da L a I, favorita da BLOSUM.
     """
-    # print_verbose("blosum_peptide_mutator:", args)
     mutation_probability: float     = get_adaptive_mutation_rate(args)
     mutated_sequence    : List[str] = list(candidate)
     
     for i in range(len(mutated_sequence)):
         if random.random() <= mutation_probability:
             original_aa        : str = mutated_sequence[i]
-            targets, weights         = get_blosum_weights(original_aa, args) # Passiamo args anche qui
+            targets, weights         = get_blosum_weights(original_aa, args)
             new_amino_acid     : str = random.choices(targets, weights = weights, k = 1)[0]
             mutated_sequence[i]      = new_amino_acid
 
     return "".join(mutated_sequence)
 
 
-# --- Operatore a Catena ---
+# --- Chain Operator ---
 
 def peptide_chain_variator(
     random: random.Random, 
-    candidates: List[Any], # Lista di Individual o str, a seconda di inspyred
+    candidates: List[Any], # List of Individual or str, depending on inspyred
     args: Dict[str, Any]
 ) -> List[str]:
     """
@@ -239,22 +238,21 @@ def peptide_chain_variator(
     `List[str]`
         Lista di sequenze peptidiche (figli) variate.
     """
-    # print_verbose("peptide_chain_variator:", args)
+    verbose = args.get('verbose', False)
+    lock    = args.get('print_lock', None)
 
-    # --- DEBUG START ---
-    print_verbose(f"DEBUG: Input Candidates: {len(candidates)}")
-    # --- DEBUG END ---
-    # Inizializza la lista per i nuovi figli
+    print_verbose(f"[peptide_chain_variator] Input Candidates: {len(candidates)}", to_print = verbose, lock = lock)
+    # Initialize the list for new children
     new_population: List[str] = []
     
-    # Itera sulla lista dei candidati (genitori) a passi di 2
+    # Iterates over the list of candidates (parents) in steps of 2
     for i in range(0, len(candidates), 2):
         
-        # Gestisce il caso in cui ci sia un solo candidato rimanente (lista dispari)
+        # Handles the case where there is only one remaining candidate (odd list)
         if i + 1 >= len(candidates):
-            # Se c'è un solo genitore, lo mutiamo e lo aggiungiamo alla nuova popolazione
+            # If there is only one parent, we mutate it and add it to the new population
             lonely_parent = candidates[i]
-            # Assumiamo che il genitore solitario sia una stringa (o lo estraiamo)
+            # We assume the lone parent is a string (or we extract it)
             lonely_seq = lonely_parent.candidate if isinstance(lonely_parent, Individual) else str(lonely_parent)
             
             mutated_child = blosum_peptide_mutator(random, lonely_seq, args)
@@ -264,25 +262,23 @@ def peptide_chain_variator(
         parent1 = candidates[i]
         parent2 = candidates[i+1]
         
-        # 1. Esegui il Crossover in base a una probabilità
+        # Perform Crossover based on a probability
         if random.random() <= C.CROSSOVER_PROBABILITY:
             children_sequences: List[str] = single_point_crossover(random, parent1, parent2)
         else:
-            # Se non avviene il crossover, i figli sono copie dei genitori
+            # If crossover does not occur, the children are copies of their parents.
             parent1_str = parent1.candidate if isinstance(parent1, Individual) else str(parent1)
             parent2_str = parent2.candidate if isinstance(parent2, Individual) else str(parent2)
             children_sequences = [parent1_str, parent2_str]
         
-        # 2. Esegui la Mutazione su ciascun figlio
+        # Perform Mutation on each child
         for child_seq in children_sequences:
             mutated_child: str = blosum_peptide_mutator(random, child_seq, args)
             new_population.append(mutated_child)
         
-    # --- DEBUG START ---
-    print_verbose(f"DEBUG: Output Children: {len(new_population)}")
+    print_verbose(f"[peptide_chain_variator] Output Children: {len(new_population)}", to_print = verbose, lock = lock)
     if len(new_population) < len(candidates):
-        print_warning("!!! ALLARME: Sto perdendo individui per strada! !!!")
-    # --- DEBUG END ---
+        print_warning(f"I'm losing people along the way! {len(new_population)} candidates  < {len(new_population)} children", lock = lock)
             
     return new_population
 
