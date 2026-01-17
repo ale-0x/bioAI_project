@@ -144,7 +144,9 @@ The script accepts several arguments to customize the simulation. They are categ
 | `--initial_mutation_rate` |  | `0.3` | Probability of mutation at the start of the simulation. |
 | `--final_mutation_rate` |  | `0.01` | Probability of mutation at the end (simulated annealing approach). |
 | `--hydrophobicity_weight` |  | `0.1` | Weight factor () used to penalize hydrophobic peptides in the fitness function. |
-| `--output` | `-o` | `result.txt` | Name of the final output folder/file. |
+| `--output` | `-o` | `result.txt` | Name of the final output folder. |
+| `--deadline` | `-d` | `23:55:00` | The maximum time limit for the job to run (format HH:MM:SS). |
+| `--resume` | `-r` | `None` | Path to the .pkl file from which to resume the simulation. |
 | `--temp_dir_base` |  | `../resources/tmp` | Base directory for temporary files generated during docking. |
 
 #### 3. AutoDock Vina Grid Configuration
