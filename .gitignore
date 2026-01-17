@@ -210,4 +210,4 @@ __marimo__/
 
 # Custom
 tmp/
-code/submit_test_job.sh
+code/test.py
