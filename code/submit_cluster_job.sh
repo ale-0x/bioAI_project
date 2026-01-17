@@ -18,6 +18,24 @@ conda activate bioai
 
 cd $HOME/bioAI_project/code
 
+RESUME_ARG=""
+
+if [ "$1" == "--checkpoint" ]; then
+    if [ -n "$2" ]; then
+        CHECKPOINT="$2"
+        echo "---------------------------------------"
+        echo "RESUME REQUEST DETECTED"
+        echo "Resuming from: $CHECKPOINT"
+        echo "---------------------------------------"
+        
+        RESUME_ARG="--resume $CHECKPOINT"
+    else
+        echo "ERROR: --checkpoint flag detected but no file path provided."
+        echo "Usage: sbatch submit_cluster_job.sh --checkpoint /path/to/checkpoint.pkl"
+        exit 1
+    fi
+fi
+
 RECEPTOR=${RECEPTOR:-"../resources/pdbqt/2P3D_no_ligand.pdbqt"}
 TMP_BASE="../resources/tmp"
 
@@ -46,6 +64,7 @@ python3 -u main.py                                              \
     --size_z                32                                  \
     --exhaustiveness        8                                   \
     --vina_exe_path         vina                                \
-    --no_delete
+    --no_delete                                                 \
+    $RESUME_ARG
 
 echo "Job finished at $(date)"

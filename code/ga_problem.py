@@ -354,8 +354,8 @@ def evaluate_peptide_binding(candidates: List[Individual], args: Dict[str, Any])
             fitnesses.append(multiprocessing_cache[seq])
             continue
 
-        if time.time() > global_deadline:
-            print_warning(f"[TIME LIMIT] Preemptive skip of '{seq}'.", lock=print_lock)
+        if time.time() > global_deadline - C.SAFETY_MARGIN:
+            print_warning(f"[TIME LIMIT] Preemptive skip of '{seq}'.", lock = print_lock)
             fitnesses.append(float('inf'))
             continue # DO NOT SAVE IN CACHE: will try again at the next reboot
 
