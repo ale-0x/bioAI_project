@@ -17,21 +17,30 @@ def single_point_crossover(
     parent2: Any
 ) -> List[str]:
     """
-    Esegue il Crossover a Punto Singolo tra due sequenze peptidiche.
+    Performs Single-Point Crossover between two peptide sequences.
+
+    Selects a random point in the sequence and swaps the segments 
+    between the two parents to create two new children.
 
     Parameters
     ----------
     random : `random.Random`
-        L'istanza dell'oggetto casuale.
-    parent1 : `Individual` o `str`
-        Il primo genitore.
-    parent2 : `Individual` o `str`
-        Il secondo genitore.
+        The random number generator instance.
+    parent1 : `Individual` or `str`
+        The first parent peptide sequence.
+    parent2 : `Individual` or `str`
+        The second parent peptide sequence.
 
     Returns
     -------
     `List[str]`
-        Una lista contenente le due nuove sequenze peptidiche (stringhe).
+        A list containing the two generated child sequences.
+
+    Examples
+    --------
+    >>> childs = single_point_crossover(rnd, "AAAAA", "BBBBB")
+    >>> print(childs)
+    ['AABBB', 'BBAAA']
     """
     parent1_str: str = parent1.candidate if isinstance(parent1, Individual) else str(parent1)
     parent2_str: str = parent2.candidate if isinstance(parent2, Individual) else str(parent2)
@@ -167,32 +176,30 @@ def blosum_peptide_mutator(
         args     : Dict[str, Any]
 ) -> str:
     """
-    Mutatore che applica mutazioni agli aminoacidi di una sequenza peptidica.
+    Mutates a peptide sequence using probabilities derived from the BLOSUM62 matrix.
 
-    La probabilità di mutare un aminoacido in un altro è ponderata dalla 
-    matrice di sostituzione BLOSUM62, favorendo le sostituzioni conservative.
-    Il tasso di mutazione viene adattato dinamicamente con l'avanzare delle generazioni.
+    Iterates through the amino acids of the sequence and, based on the mutation rate,
+    replaces residues with chemically likely substitutes defined by the substitution matrix.
 
     Parameters
     ----------
     random : `random.Random`
-        L'istanza dell'oggetto casuale.
+        The random number generator instance.
     candidate : `str`
-        La sequenza peptidica da mutare.
+        The peptide sequence to mutate.
     args : `Dict[str, Any]`
-        Dizionario di argomenti, usato per recuperare il rate adattivo.
+        Arguments containing 'mutation_rate' and optionally the 'blosum_matrix'.
 
     Returns
     -------
     `str`
-        La sequenza peptidica mutata.
+        The mutated peptide sequence.
 
     Examples
     --------
-    >>> seq = 'LVTA'
-    >>> mutated_seq = blosum_peptide_mutator(random_instance, seq, {'mutation_rate': 0.1})
-    >>> print(mutated_seq) 
-    'IVTA' # Esempio di mutazione da L a I, favorita da BLOSUM.
+    >>> mutated = blosum_peptide_mutator(rnd, "ACDEF", {'mutation_rate': 0.1})
+    >>> print(mutated)
+    'ACDWF'
     """
     mutation_probability: float     = get_adaptive_mutation_rate(args)
     mutated_sequence    : List[str] = list(candidate)
@@ -215,28 +222,30 @@ def peptide_chain_variator(
     args: Dict[str, Any]
 ) -> List[str]:
     """
-    Combina Crossover e Mutazione in un'unica catena di variatori.
+    The main genetic variator operator for the evolutionary algorithm.
 
-    Questo operatore è usato come singolo `ea.variator` per garantire 
-    che l'oggetto passato al core di `inspyred` sia una funzione e non una tupla,
-    evitando l'AttributeError riscontrato.
-    
-    Il 100% dei candidati selezionati per la variazione (genitori) viene 
-    sottoposto a crossover, e il 100% dei figli risultanti viene sottoposto a mutazione.
+    Applies both Crossover (recombination) and Mutation to the population.
+    1. Pairs parents sequentially.
+    2. Applies crossover with probability `CROSSOVER_PROBABILITY`.
+    3. Applies mutation to the resulting offspring using adaptive mutation rates.
 
     Parameters
     ----------
     random : `random.Random`
-        L'istanza dell'oggetto casuale.
+        The random number generator instance.
     candidates : `List[Individual]`
-        Lista dei candidati (genitori) selezionati per la variazione.
+        The list of parent individuals selected for reproduction.
     args : `Dict[str, Any]`
-        Dizionario di argomenti, deve contenere il rate di mutazione.
+        Arguments containing global parameters (probabilities, mutation rates).
 
     Returns
     -------
     `List[str]`
-        Lista di sequenze peptidiche (figli) variate.
+        The new list of offspring sequences to form the next generation.
+
+    Examples
+    --------
+    >>> offspring = peptide_chain_variator(rnd, parents, args)
     """
     verbose = args.get('verbose', False)
     lock    = args.get('print_lock', None)
@@ -284,6 +293,28 @@ def peptide_chain_variator(
 
 # --- Hydrophobucity ---
 def get_hydrophobicity(peptide: str) -> float:
-    """Calcola l'idrofobicità media di una sequenza peptidica."""
+    """
+    Calculates the average hydrophobicity index of a peptide sequence.
+
+    Uses a specific scale (e.g., Monera et al. at pH 7) to sum the hydrophobicity
+    values of all residues and computes the average.
+
+    Parameters
+    ----------
+    peptide : `str`
+        The input peptide sequence (e.g., "WWPYWW").
+
+    Returns
+    -------
+    `float`
+        The average hydrophobicity value. Positive values indicate hydrophobic, 
+        negative values indicate hydrophilic.
+
+    Examples
+    --------
+    >>> val = get_hydrophobicity("WWWW")
+    >>> print(val)
+    97.0
+    """
     average_hydrophobicity = sum(C.AMINO_HYDROPHOBICITY_PH7.get(aa, 0) for aa in peptide) / len(peptide)
     return average_hydrophobicity

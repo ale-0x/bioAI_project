@@ -1,7 +1,7 @@
 # constants.py
 
 __author__  = "Alex Callegaro and Clemente Calabrese"
-__version__ = '1.2.0'
+__version__ = '1.2.1'
 
 from Bio.Align import substitution_matrices
 from pathlib   import Path

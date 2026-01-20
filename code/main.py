@@ -68,26 +68,15 @@ def parse_arguments() -> argparse.Namespace:
 
 def run_peptide_ga() -> None:
     """
-    Esegue l'Algoritmo Genetico (GA) per l'ottimizzazione della sequenza peptidica.
+    Main execution function for the Peptide Evolutionary Algorithm.
 
-    Configura e lancia il framework `inspyred`, utilizzando i generatori, 
-    i variatori (crossover e mutazione) e gli evaluatori specifici del problema.
-
-    Parameters
-    ----------
-    Nessuno. I parametri del GA sono definiti in `constants.py`.
-
-    Returns
-    -------
-    `inspyred.ec.Individual`
-        L'individuo (sequenza peptidica) migliore trovato alla fine dell'evoluzione,
-        con la massima fitness (energia di legame minima).
-
-    Examples
-    --------
-    >>> best_peptide = run_peptide_ga()
-    >>> print(f"Best sequence: {best_peptide.candidate}")
-    Best sequence: LWRTAVI # Esempio di miglior sequenza
+    Orchestrates the entire workflow:
+    1. Sets up the output directories and logging.
+    2. Initializes the Random Number Generator.
+    3. Configures the `inspyred` Evolutionary Computation (EC) engine.
+    4. Defines the pipeline: Generator, Evaluator, Variator, Replacer, Terminator.
+    5. Runs the evolution for `MAX_GENERATIONS`.
+    6. Saves the results and generates analysis plots.
     """
     START_TIME = time.time()
 
