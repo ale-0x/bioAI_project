@@ -1,0 +1,38 @@
+ID             : 427564
+Receptor Name  : 2P3D_no_ligand
+Receptor Path  : ../resources/pdbqt/2P3D_no_ligand.pdbqt
+Sequence       : WWPYWW
+Fitness        : -10.059999999999999
+Binding Energy : -11.2
+Hydrophobicity : 1.14
+Birthdate      : 19/01/2026 - 22:27:35
+
+========================================
+       JOB CONFIGURATION: 427564
+========================================
+receptor_name         : 2P3D_no_ligand
+receptor_file         : ../resources/pdbqt/2P3D_no_ligand.pdbqt
+job_id                : 427564
+cpus                  : 8
+peptide_length        : 6
+population_size       : 50
+generations           : 50
+initial_mutation_rate : 0.6
+final_mutation_rate   : 0.15
+hydrophobicity_weight : 0.015
+temp_dir_base         : ../resources/tmp
+output                : ../results/result
+deadline              : 23:56:00
+resume                : ../results/result_427417/checkpoint_427417.pkl
+center_x              : 8.084
+center_y              : -13.829
+center_z              : -0.14
+size_x                : 32
+size_y                : 32
+size_z                : 32
+exhaustiveness        : 8
+vina_exe_path         : vina
+no_delete             : True
+verbose               : False
+========================================
+

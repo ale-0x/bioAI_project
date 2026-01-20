@@ -9,28 +9,30 @@ from utils     import print_error
 
 def prepare_receptor_pdbqt(input_pdb_file: str | Path, output_pdbqt_file: str | Path) -> bool:
     """
-    Prepara il recettore da PDB a PDBQT usando OpenBabel.
+    Prepares the receptor file from PDB to PDBQT format using OpenBabel.
 
-    Questo passaggio è necessario per aggiungere idrogeni e cariche al recettore
-    prima di eseguire Vina. Rimuove anche acqua e altri eteroatomi (flag -xr).
-
-    Steps:
-    1. Legge il PDB.
-    2. Rimuove l'acqua (HOH) e i sali.
-    3. Aggiunge gli idrogeni polari.
-    4. Calcola le cariche parziali (Gasteiger) e scrive il PDBQT.
+    This step is crucial for Vina docking. It performs the following cleaning steps:
+    1. Reads the raw PDB file.
+    2. Removes water molecules (HOH) and salts.
+    3. Adds polar hydrogens.
+    4. Calculates partial charges (Gasteiger model).
+    5. Writes the output .pdbqt file.
 
     Parameters
     ----------
-    input_pdb_file : `str`
-        Percorso al file PDB originale (es. '7CAM.pdb').
-    output_pdbqt_file : `str`
-        Percorso dove salvare il file PDBQT preparato (es. '7CAM.pdbqt').
+    input_pdb_file : `str` or `Path`
+        Path to the original PDB file (e.g., '7CAM.pdb').
+    output_pdbqt_file : `str` or `Path`
+        Destination path for the prepared PDBQT file.
 
     Returns
     -------
     `bool`
-        True se la preparazione è stata completata con successo, False altrimenti.
+        True if the preparation was successful, False otherwise.
+
+    Examples
+    --------
+    >>> success = prepare_receptor_pdbqt("protein.pdb", "protein.pdbqt")
     """
     input_pdb_file    = Path(input_pdb_file)
     output_pdbqt_file = Path(output_pdbqt_file)

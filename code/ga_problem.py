@@ -24,29 +24,29 @@ from utils      import print_error, print_verbose, print_warning
 
 def peptide_generator(random: random.Random, args: Dict[str, Any]) -> str:
     """
-    Generatore della sequenza peptidica iniziale per la popolazione.
+    Generates the initial peptide sequence for the population.
 
-    Crea una sequenza casuale di aminoacidi di lunghezza fissa 
-    (definita da `PEPTIDE_LENGTH` o dagli argomenti).
+    Creates a random sequence of amino acids with a fixed length 
+    (defined by `PEPTIDE_LENGTH` or passed via arguments).
 
     Parameters
     ----------
     random : `random.Random`
-        L'istanza dell'oggetto casuale fornita dal framework `inspyred`.
+        The random number generator instance provided by the `inspyred` framework.
     args : `Dict[str, Any]`
-        Dizionario di argomenti opzionali. Può contenere la chiave 
-        `'peptide_length'` (`int`) per specificare la lunghezza.
+        Dictionary of optional arguments. It may contain the key 
+        `'peptide_length'` (`int`) to specify the sequence length.
 
     Returns
     -------
     `str`
-        Una sequenza peptidica casuale (stringa di codici a una lettera).
+        A random peptide sequence (string of one-letter amino acid codes).
 
     Examples
     --------
     >>> generator = peptide_generator(random_instance, {'peptide_length': 5})
     >>> print(generator)
-    'ALTSV' # Esempio di output casuale
+    'ALTSV'
     """
     length: int = args.get('peptide_length', C.PEPTIDE_LENGTH)
     return "".join(random.choice(C.AMINO_ACIDS) for _ in range(length))
@@ -56,17 +56,26 @@ def peptide_generator(random: random.Random, args: Dict[str, Any]) -> str:
 
 def generate_pdb_rdkit(sequence: str, output_file: str | Path) -> None:
     """
-    Genera una conformazione 3D iniziale per un peptide data la sua sequenza.
+    Generates an initial 3D conformation for a peptide given its sequence.
 
-    Utilizza RDKit per costruire la catena aminoacidica, aggiungere idrogeni
-    ed eseguire una minimizzazione energetica rapida (MMFF94).
+    Uses RDKit to construct the amino acid chain, add hydrogens, generate 
+    3D coordinates using the ETKDGv3 algorithm, and perform a quick 
+    energy minimization (MMFF94) to relax the structure.
 
     Parameters
     ----------
     sequence : `str`
-        Sequenza peptidica (es. 'ACDEF').
-    output_pdb : `str`
-        Percorso del file PDB di output da creare.
+        The peptide sequence (e.g., 'ACDEF').
+    output_file : `str` or `Path`
+        The file path where the generated PDB structure will be saved.
+
+    Returns
+    -------
+    `None`
+
+    Examples
+    --------
+    >>> generate_pdb_rdkit("WWPYWW", "candidate.pdb")
     """
     output_file = Path(output_file)
 
@@ -99,35 +108,32 @@ def generate_pdb_rdkit(sequence: str, output_file: str | Path) -> None:
 
 def prepare_ligand_openbabel(pdb_path: str | Path, pdbqt_output_path: str | Path, center: Tuple[float, float, float]) -> bool:
     """
-    Converte e prepara un file ligando (es. PDB) in formato PDBQT utilizzando OpenBabel.
+    Converts and prepares a ligand file (PDB) into PDBQT format using OpenBabel.
 
-    Questa funzione esegue passaggi critici per il docking:
-    1. Legge il file molecolare di input.
-    2. Aggiunge gli idrogeni polari (protonazione a pH 7.4).
-    3. Calcola le cariche parziali (metodo Gasteiger).
-    4. Genera l'albero delle torsioni (necessario per la flessibilità in Vina) e scrive il file .pdbqt.
+    This function performs critical steps for docking:
+    1. Reads the input molecular file.
+    2. Translates the molecule's centroid to the target box center.
+    3. Adds polar hydrogens (protonation at pH 7.4).
+    4. Calculates partial charges (Gasteiger method).
+    5. Writes the .pdbqt file including the torsion tree.
 
     Parameters
     ----------
-    input_file : `str`
-        Il percorso al file del ligando di input (es. 'ligand.pdb').
-    
-    output_pdbqt_file : `str`
-        Il percorso dove salvare il file PDBQT preparato (es. 'ligand.pdbqt').
-    
-    verbose : `bool`, default `False`, optional
-        Se `True`, stampa informazioni dettagliate sul processo di conversione.
+    pdb_path : `str` or `Path`
+        The path to the input ligand PDB file.
+    pdbqt_output_path : `str` or `Path`
+        The destination path for the prepared PDBQT file.
+    center : `Tuple[float, float, float]`
+        The (x, y, z) coordinates where the ligand should be centered.
 
     Returns
     -------
     `bool`
-        `True` se la preparazione e la scrittura del file sono avvenute con successo,
-        `False` in caso di errori (es. file non trovato, errore di parsing).
+        True if the preparation and file writing were successful, False otherwise.
 
-    Notes
-    -----
-    Richiede che OpenBabel (bindings Python) sia installato correttamente nell'ambiente.
-    L'output PDBQT includerà automaticamente i rami ROOT/BRANCH/TORSDOF gestiti da OpenBabel.
+    Examples
+    --------
+    >>> success = prepare_ligand_openbabel("ligand.pdb", "ligand.pdbqt", (10.5, -4.0, 32.1))
     """
     pdb_path            = Path(pdb_path)
     pdbqt_output_path   = Path(pdbqt_output_path)
@@ -157,55 +163,46 @@ def prepare_ligand_openbabel(pdb_path: str | Path, pdbqt_output_path: str | Path
 
 def run_vina_real(vina_exe_path: str | Path, pdbqt_ligand: str | Path, receptor_file: str | Path, center: Tuple[float, float, float], box_size: Tuple[int, int, int], vina_output: str | Path, cpu: int = 1, exhaustiveness: int = C.EXHAUSTIVENESS, time_left: float = float("inf"), verbose: bool = False) -> float:
     """
-    Esegue il docking molecolare lanciando il processo AutoDock Vina e restituisce l'energia di legame migliore.
+    Executes molecular docking by launching the AutoDock Vina process.
 
-    La funzione costruisce ed esegue il comando da terminale per Vina, specificando
-    il recettore, il ligando, la search box e i parametri di precisione.
-    Cattura l'output standard per estrarre il punteggio di affinità (energia libera)
-    del primo modo di binding (il migliore).
+    Builds and runs the command line for Vina, specifying the receptor, ligand, 
+    search box, and precision parameters. Captures standard output to parse 
+    and extract the best binding affinity score (free energy).
 
     Parameters
     ----------
-    vina_exe_path : `str`
-        Percorso dell'eseguibile di AutoDock Vina.
-    
-    ligand_pdbqt_file : `str`
-        Percorso al file del ligando preparato (.pdbqt).
-    
-    receptor_pdbqt_file : `str`
-        Percorso al file del recettore preparato (.pdbqt).
-    
-    output_file : `str`
-        Percorso dove salvare il file di output contenente le pose di docking (.pdbqt).
-    
+    vina_exe_path : `str` or `Path`
+        Path to the AutoDock Vina executable.
+    pdbqt_ligand : `str` or `Path`
+        Path to the prepared ligand file (.pdbqt).
+    receptor_file : `str` or `Path`
+        Path to the prepared receptor file (.pdbqt).
     center : `Tuple[float, float, float]`
-        Coordinate (x, y, z) del centro della box di ricerca (in Ångstrom).
-    
+        The (x, y, z) coordinates of the search box center.
     box_size : `Tuple[float, float, float]`
-        Dimensioni (x, y, z) della box di ricerca (in Ångstrom).
-    
-    exhaustiveness : `int`, default `8`, optional
-        Parametro di esaustività della ricerca globale di Vina (valori più alti = ricerca più accurata ma lenta).
-    
-    vina_output : `str`
-        Output file di AutoDock Vina.
-    
-    cpu : `int`, default `1`, optional
-        Numero di CPU/thread da dedicare a questa singola esecuzione di Vina.
-    
-    verbose : `bool`, default `False`, optional
-        Se `True`, stampa il comando eseguito e l'output grezzo di Vina in caso di errore.
+        The (x, y, z) dimensions of the search box in Ångstroms.
+    vina_output : `str` or `Path`
+        Path where the docking poses (PDBQT) will be saved.
+    cpu : `int`, optional
+        Number of CPUs to use for this specific Vina run (default is 1).
+    exhaustiveness : `int`, optional
+        Search exhaustiveness parameter (default is 8). Higher means more accurate but slower.
+    time_left : `float`, optional
+        Maximum time allowed (in seconds) for the subprocess before timeout.
+    verbose : `bool`, optional
+        If True, prints debug information.
 
     Returns
     -------
     `float`
-        L'energia di legame del miglior modo (in kcal/mol). 
-        Restituisce `0.0` (o un valore positivo alto di penalità) se il docking fallisce o non vengono trovati modi.
+        The binding energy of the best mode (kcal/mol). 
+        Returns `float('inf')` if docking fails or no modes are found.
 
-    Raises
-    ------
-    RuntimeError
-        Se l'eseguibile di Vina non viene trovato o restituisce un codice di errore.
+    Examples
+    --------
+    >>> energy = run_vina_real("vina", "lig.pdbqt", "rec.pdbqt", (0,0,0), (20,20,20), "out.pdbqt")
+    >>> print(energy)
+    -9.4
     """
     vina_exe_path = Path(vina_exe_path)
     pdbqt_ligand  = Path(pdbqt_ligand)
@@ -299,22 +296,33 @@ def run_vina_real(vina_exe_path: str | Path, pdbqt_ligand: str | Path, receptor_
 
 def evaluate_peptide_binding(candidates: List[Individual], args: Dict[str, Any]) -> List[float]:
     """
-    Valuta l'affinità di legame (fitness) per una lista di sequenze peptidiche.
+    Evaluates the binding affinity (fitness) of a list of peptide candidates.
 
-    Per ogni candidato, genera la struttura 3D, la prepara per Vina ed esegue
-    il calcolo del docking. Restituisce il valore di energia libera stimato.
+    For each peptide:
+    1. Converts the sequence into a 3D structure (PDB) using RDKit.
+    2. Prepares the ligand (PDBQT) using OpenBabel.
+    3. Performs docking against the receptor using AutoDock Vina.
+    4. Calculates fitness as: Binding Energy + (Hydrophobicity * Weight).
 
     Parameters
     ----------
     candidates : `List[str]`
-        Lista di sequenze peptidiche (stringhe di aminoacidi).
+        A list of peptide sequences to evaluate.
     args : `Dict[str, Any]`
-        Dizionario di parametri che deve contenere 'receptor_file' e i dati della grid box.
+        Dictionary containing simulation parameters (receptor path, box size, 
+        mutation rates, hydrophobicity weights, etc.).
 
     Returns
     -------
     `List[float]`
-        Lista dei valori di fitness (kcal/mol). Valori più bassi indicano legami migliori.
+        A list of fitness values corresponding to the candidates. 
+        Lower values indicate better fitness (stronger binding/optimization).
+
+    Examples
+    --------
+    >>> scores = evaluate_peptide_binding(['WWPYWW'], {'receptor_file': '...'})
+    >>> print(scores)
+    [-11.25]
     """
     # Reading parameters with fallback
     job_id                : str              = args.get('job_id', str(uuid.uuid4()))

@@ -226,7 +226,27 @@ def print_warning(*values: object, **kwargs) -> None:
 
 def time_based_termination(population, num_generations, num_evaluations, args):
     """
-    Ferma le generazioni se abbiamo superato la deadline globale (meno il buffer).
+    A termination condition based on the maximum execution time.
+
+    Stops the evolutionary algorithm if the elapsed time exceeds the 
+    `max_time_hours` specified in the arguments, or if the maximum 
+    number of generations is reached.
+
+    Parameters
+    ----------
+    population : `List[Individual]`
+        The current population.
+    num_generations : `int`
+        The current generation index.
+    num_evaluations : `int`
+        The number of evaluations performed.
+    args : `Dict[str, Any]`
+        Arguments containing `start_time` and `max_time_hours`.
+
+    Returns
+    -------
+    `bool`
+        True if the algorithm should stop, False otherwise.
     """
     global_deadline = args.get('global_deadline', float('inf'))
     generation_num  = args.get('generation_num', None)
@@ -242,7 +262,26 @@ def time_based_termination(population, num_generations, num_evaluations, args):
 
 def generation_tracker_observer(population, num_generations, num_evaluations, args):
     """
-    Aggiorna il contatore di generazione condiviso tra i processi.
+    Observer that prints a summary to the console at each generation.
+
+    Displays the current generation number, the best fitness found so far, 
+    and the sequence of the best candidate. Useful for monitoring the 
+    progress of the simulation in real-time.
+
+    Parameters
+    ----------
+    population : `List[Individual]`
+        The current population of individuals.
+    num_generations : `int`
+        The current generation index.
+    num_evaluations : `int`
+        The cumulative number of fitness evaluations.
+    args : `Dict[str, Any]`
+        Dictionary of arguments (not explicitly used but required by inspyred).
+
+    Returns
+    -------
+    `None`
     """
     generation_num  = args.get('generation_num', None)
     print_lock      = args.get('print_lock', None)
@@ -256,6 +295,21 @@ def generation_tracker_observer(population, num_generations, num_evaluations, ar
                 print(f"Rated generation {generation_num.value}.")
 
 def print_arguments(arguments: Namespace, name = "", to_print: bool = True) -> str | None:
+    """
+    Prints the configuration arguments in a formatted, readable table.
+
+    Iterates through the `argparse.Namespace` or dictionary and prints 
+    keys and values, aligning them for better readability in the logs.
+
+    Parameters
+    ----------
+    args : `argparse.Namespace` or `Dict[str, Any]`
+        The collection of arguments and parameters used for the simulation.
+
+    Returns
+    -------
+    `None`
+    """
     output = list()
     output.append("\n" + "="*40)
     output.append(f"       JOB CONFIGURATION: {name}")
@@ -272,7 +326,26 @@ def print_arguments(arguments: Namespace, name = "", to_print: bool = True) -> s
 
 def checkpoint_observer(population, num_generations, num_evaluations, args):
     """
-    Salva lo stato corrente dell'evoluzione su file (pickle) usando pathlib.
+    Saves the state of the evolutionary algorithm to a binary file (pickle).
+
+    This observer is triggered at every generation (or a specified interval) 
+    to serialize the Random Number Generator state and the current population. 
+    Allows the simulation to be resumed later in case of interruption.
+
+    Parameters
+    ----------
+    population : `List[Individual]`
+        The current population to be saved.
+    num_generations : `int`
+        The current generation number.
+    num_evaluations : `int`
+        The number of evaluations performed.
+    args : `Dict[str, Any]`
+        Arguments containing the `'checkpoint_file'` path.
+
+    Returns
+    -------
+    `None`
     """
     global_deadline = args.get('global_deadline', float('inf'))
     if time.time() >= global_deadline - SAFETY_MARGIN:  # 10 second margin to avoid incomplete saves
@@ -356,7 +429,29 @@ def checkpoint_observer(population, num_generations, num_evaluations, args):
 
 def restore_context(checkpoint_path: Path, new_temp_dir: Path, new_job_id: str, new_results_dir: Path) -> tuple[int, list, dict]:
     """
-    Carica il pickle, sposta i file temp, unisce i CSV. Restituisce: (generations_done, population_seeds)
+    Restores a simulation environment from a checkpoint file.
+
+    Loads the Random Number Generator state and the population from a 
+    pickle file, allowing the algorithm to continue from where it left off.
+
+    Parameters
+    ----------
+    filename : `str` or `Path`
+        The path to the checkpoint file (.pkl).
+
+    Returns
+    -------
+    `Tuple[List[Individual], random.Random, int, int]`
+        A tuple containing:
+        1. The restored population.
+        2. The restored random number generator instance.
+        3. The generation number to resume from.
+        4. The evaluation count to resume from.
+
+    Raises
+    ------
+    FileNotFoundError
+        If the checkpoint file does not exist.
     """
     ckpt              = Path(checkpoint_path)
 
@@ -523,7 +618,27 @@ def restore_context(checkpoint_path: Path, new_temp_dir: Path, new_job_id: str, 
 
 def custom_file_observer(population, num_generations, num_evaluations, args: dict):
     """
-    Crea un file observer personalizzato per la correzione del numero di generazioni in caso di riavvio
+    An `inspyred` observer that logs population statistics to a CSV file.
+
+    Invoked at every generation, it saves:
+    - Generation number
+    - Worst, Best, Median, and Average fitness
+    - The sequence and fitness of the best individual.
+
+    Parameters
+    ----------
+    population : `List[Individual]`
+        The current population of individuals.
+    num_generations : `int`
+        The current generation index.
+    num_evaluations : `int`
+        The cumulative number of fitness evaluations performed.
+    args : `Dict[str, Any]`
+        Arguments containing the file handle or path for logging.
+
+    Returns
+    -------
+    `None`
     """
     offset      = args.get('generation_offset', 0)
     # Calls the standard observer to save statistics and individuals
@@ -533,15 +648,19 @@ def custom_file_observer(population, num_generations, num_evaluations, args: dic
 
 def inspect_checkpoint(checkpoint_path: str | Path, show_all: bool = False) -> None:
     """
-    Legge e stampa la struttura interna di un file checkpoint (.pkl).
-    Allinea dinamicamente le colonne per una lettura pulita.
-    
+    Analyzes and prints the contents of a checkpoint file without loading it.
+
+    Debugging tool to check the validity, generation number, and best 
+    individuals stored inside a pickle checkpoint file.
+
     Parameters
     ----------
-    checkpoint_path : str | Path
-        Percorso al file .pkl.
-    show_all : bool
-        Se True, mostra TUTTI gli elementi. Se False, mostra un'anteprima.
+    checkpoint_path : `str` or `Path`
+        Path to the checkpoint file to inspect.
+
+    Returns
+    -------
+    `None`
     """
     import pickle
     from pathlib import Path
