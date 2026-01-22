@@ -201,9 +201,9 @@ At the end of the run, the `plots/` folder will contain:
 
 ## 👥 Authors
 
-| Name | Role |
-| --- | --- |
-| [Alex Callegaro](https://github.com/ale-0x) | Master's student in Quantitative and Computational Biology, University of Trento |
-| [Clemente Calabrese](https://github.com/cl3mente) | Master's student in Quantitative and Computational Biology, University of Trento |
-| [Federico Cavasin](https://github.com/Clausola) | Master's student in Quantitative and Computational Biology, University of Trento |
-| [Giada Silvaggi](https://github.com/giadasil) | Master's student in Quantitative and Computational Biology, University of Trento |
+| Team Member | Role | Main Contributions
+| --- | --- | --- |
+| [Alex Callegaro](https://github.com/ale-0x) | Lead Developer | Algorithm Implementation, Docking Pipeline, Data Visualization, Project Architecture. |
+| [Clemente Calabrese](https://github.com/cl3mente) | Developer | Report Writing, Helper Scripts, Minor fixes. |
+| [Federico Cavasin](https://github.com/Clausola) | Researcher | Biological Background, Docking Theory, Report Writing. |
+| [Giada Silvaggi](https://github.com/giadasil) | Reviewer | Conceptualization, Final Revision. |
